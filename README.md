@@ -1,69 +1,59 @@
 
 # mcp-ssh-gateway
 
-`mcp-ssh-gateway` is a secure, self-contained agent that enables LLMs to inspect, manage, and interact with remote systems via SSH tunnels — **without exposing edge devices to inbound network traffic**. It bridges the cognitive power of AI with the practical ability to reach and modify systems, all under tight operational and security control.
+`mcp-ssh-gateway` is a lightweight, secure SSH control agent designed to bridge the gap between LLMs and the real world. It enables a trusted Large Language Model (LLM) to connect with and execute tasks on remote edge devices — securely, predictably, and audibly — through managed SSH reverse tunnels.
+
+It is not another automation tool. It is not a shell wrapper. It is an **interface between intelligent agents and practical systems**, a way for cognitive AI to extend its reach into systems, devices, and runtime environments — all under full administrative control.
 
 ---
 
-## 🧭 Project Purpose
+## 🚀 Why This Project Exists
 
-Modern AI agents need not just intelligence — they need **reach**. `mcp-ssh-gateway` gives LLMs that reach, by providing a trusted, auditable bridge between thought and action.
+Modern AI systems are becoming increasingly capable of analyzing, planning, and adapting. However, their ability to act on live systems remains gated by security, observability, and infrastructure barriers.
 
-### Key Use Cases
+`mcp-ssh-gateway` solves that problem.
 
-- ✅ LLM-driven system inspection, diagnostics, and remediation
-- ✅ Secure AI-powered infrastructure discovery and OS hardening
-- ✅ Automated forensics and incident triage via remote shell
-- ✅ Controlled remote development and code review
-- ✅ Scriptable, intelligent system lifecycle operations
+It provides a clean, secure protocol boundary for remote execution, turning AI agents from passive advisors into active collaborators.
 
-The gateway is **task-agnostic** — it doesn’t prescribe what the LLM should do. It simply enables **secure, structured action**.
-
----
-
-## 🔐 Security Model
-
-### 🔒 Secure by Default
-
-- Default mode is **reverse SSH**, where the **edge device connects to the agent**
-- This avoids opening SSH ports in untrusted, remote, or NAT'd environments
-- Edges **cannot** execute commands on the agent — only the reverse
-
-### 🔑 Key Management Principles
-
-- Private keys are **never exchanged over MCP**
-- Admins must mount:
-  - Agent host key (`host_rsa`)
-  - Authorized edge public keys (`authorized_keys`)
-- LLMs can request key fingerprints or provisioning help — but **never see private credentials**
-
-### 🛡️ Centralized Control
-
-- Agent is operated from **trusted infrastructure**
-- All execution occurs on the **edge**, initiated by the **agent**
-- Supports optional `inbound` SSH mode for trusted environments, clearly marked as less secure
+Use it to:
+- Inspect systems and report findings
+- Run security audits or OS updates
+- Apply fixes, deploy containers, or manage source code
+- Review and contribute to software projects
+- Discover capabilities and choose optimal systems for a given task
 
 ---
 
-## 🏗 Architecture Overview
+## 🔐 Security-First Design
+
+Security is not an afterthought — it's the starting point.
+
+- ✅ **Reverse SSH by default**: The agent never initiates a connection to the edge unless explicitly configured. This prevents the need to expose edge ports to the internet.
+- ✅ **No command execution on the agent**: The gateway never allows edges to execute code on the control side.
+- ✅ **Token-based MCP authorization**: Sensitive actions like registering a new edge key are guarded by a static token.
+- ✅ **No key transmission over MCP**: Private keys are never shared via the protocol. Admins control key provisioning.
+
+---
+
+## 🧱 Architecture Overview
 
 ```plaintext
-   +-----------------+               +--------------------------+
-   |   OpenWebUI /   |   MCP (STDIO) |    mcp-ssh-gateway Agent |
-   |      LLM        +<------------->+    (Docker Container)    |
-   +-----------------+               +--------------------------+
-                                              |
-                                              | Reverse SSH Tunnel
-                                              v
-                                 +-----------------------------+
-                                 |      Edge Device            |
-                                 |  (No open ports required)   |
-                                 +-----------------------------+
+   +-------------------+               +----------------------------+
+   |   OpenWebUI /     |   MCP (STDIO) |  mcp-ssh-gateway (Agent)   |
+   |    LLM Client     +<------------->+  Docker or bare-metal host |
+   +-------------------+               +----------------------------+
+                                                 |
+                                                 | Reverse SSH Tunnel
+                                                 v
+                                    +-----------------------------+
+                                    |      Edge Device            |
+                                    |  (Behind NAT or firewall)   |
+                                    +-----------------------------+
 ```
 
 ---
 
-## ⚙️ Usage
+## ⚙️ Quick Start
 
 ### 🔧 Docker (Preferred)
 
@@ -77,77 +67,69 @@ docker run --rm -it \
   mcp-ssh-gateway
 ```
 
-Expected key mounts:
-
-- `/keys/host_rsa` – SSH private key for the agent
-- `/keys/authorized_keys` – list of trusted edge public keys
-
 ### 🐍 Bare Metal (Advanced)
 
 ```bash
 export GATEWAY_MODE=reverse
 export PROVISION_TOKEN=your-secret-token
-python3 agent.py
+python3 agent/main.py
 ```
 
-Dependencies: `openssh-server`, `paramiko`, `mcp`
+Keys must be mounted into the container or accessible from the file system:
+- `/keys/host_rsa` – The SSH private key of the agent
+- `/keys/authorized_keys` – List of trusted public keys for incoming edge connections
 
 ---
 
-## 🛰️ MCP Functions
+## ✨ Core Features
 
-### `get_status`
-Returns whether an edge device is currently connected.
-
-### `register_edge_key`
-Registers a new edge public key (requires `PROVISION_TOKEN`).
-
-### `get_agent_pubkey`
-Returns the public SSH key of the agent for provisioning.
-
-### `run_command`
-Executes a command on the connected edge device.
-
-### `upload_file`
-Uploads a file to the edge system.
-
-### `get_device_info`
-Returns OS type, CPU, RAM, and capability summary.
+- 🛡 Secure-by-default reverse SSH gateway
+- 🔁 Auto-discovers connected edge device capabilities
+- ⚙️ Remote execution and file upload via MCP
+- 📜 Lightweight, auditable, and LLM-friendly STDIO protocol
+- 🧩 Drop-in support for OpenWebUI via `mcpo`
 
 ---
 
-## 🧩 Connection Modes
+## 🛰 MCP Functions
 
-| Mode | Description |
-|------|-------------|
-| `reverse` (default) | Edge device initiates the connection to the agent |
-| `inbound` (optional) | Agent listens for incoming SSH connections (less secure) |
-
-Set via `GATEWAY_MODE=reverse` or `GATEWAY_MODE=inbound`.
+| Function | Purpose |
+|----------|---------|
+| `get_status` | Reports connection and session state |
+| `register_edge_key` | Adds a new authorized key (requires token) |
+| `get_agent_pubkey` | Returns the agent’s public key |
+| `run_command` | Executes a command on the edge |
+| `upload_file` | Uploads a file to the edge |
+| `get_device_info` | Returns system info and capabilities |
 
 ---
 
-## 🛠 Developer Guide
+## 🛠️ Developer Guide
 
-### Run Dev Environment
+### Development Flow
 
 ```bash
 docker build -t mcp-ssh-gateway .
 docker run -v $PWD:/app -it mcp-ssh-gateway /bin/bash
 ```
 
-### Contribute
+Or run it locally using:
 
-- Fork and submit PRs
-- Write tests for MCP functions
-- Respect secure-by-default principle
-- Contributions to onboarding flows and observability are welcome!
+```bash
+python3 agent/main.py
+```
+
+### Contributing
+
+- Fork and PR on GitHub
+- Adhere to security model (reverse shell only, no private key exchange)
+- Improve onboarding, key management, observability, and protocol handlers
 
 ---
 
 ## 📜 License
 
-MIT License
+Licensed under the Apache License, Version 2.0.
 
 ---
 
