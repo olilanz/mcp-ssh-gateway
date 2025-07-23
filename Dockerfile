@@ -4,8 +4,8 @@ FROM ubuntu:22.04
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     openssh-server \
-    python3 \
-    python3-pip \
+    python3 python3-pip \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Create working directory
