@@ -27,7 +27,6 @@ This document provides everything you need to understand, modify, and extend the
              |                                  |
              |   Reverse SSH Tunnel (Port X)    |
              +----------------------------------+
-
 ```
 
 - **Agent runs** an SSH server inside a Docker container
@@ -65,22 +64,28 @@ mcp-ssh-gateway/
 
 ---
 
-## 🔌 Extending Capabilities
+## 🔄 Implementation Details
 
-Each capability (e.g., `get_os_info`, `list_processes`, etc.) is implemented as an MCP method.
+### Connection Monitoring
 
-To add a new one:
+The agent continuously monitors for a listener on a fixed port (default: `2222`). When a listener is detected, the agent establishes an SSH connection and routes traffic between the SSH connection and the MCP protocol.
 
-1. Define the method in `mcp_handlers.py`
-2. If needed, add a script to `scripts/`
-3. Ensure the output is machine-readable (e.g., JSON, line-separated)
-4. Add discovery hints so LLM clients can query capabilities
+- **File**: `agent/main.py`
+- **Function**: `monitor_ssh_connection`
 
-Example:
-```python
-def get_os_info():
-    return run_script("scripts/os_info.sh")
-```
+### Traffic Routing
+
+Traffic between the SSH connection and the MCP protocol is routed securely. All traffic and errors are logged for debugging and troubleshooting.
+
+- **File**: `agent/main.py`
+- **Function**: `monitor_ssh_connection`
+
+### Error Handling
+
+The agent logs detailed error messages to help diagnose connectivity issues. It retries failed connections after a short delay.
+
+- **File**: `agent/ssh_controller.py`
+- **Functions**: `get_ssh_client`, `exec_remote_command`, `upload_remote_file`
 
 ---
 
