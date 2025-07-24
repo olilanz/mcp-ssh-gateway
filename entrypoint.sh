@@ -5,19 +5,27 @@ set -e
 echo "[mcp-ssh-gateway] Starting in $GATEWAY_MODE mode"
 
 if [ "$GATEWAY_MODE" = "inbound" ]; then
-    echo "[mcp-ssh-gateway] Launching sshd in inbound mode on port ${SSH_PORT:-2222}"
+    echo "[mcp-ssh-gateway] Launching sshd in inbound mode on port ${SSH_LISTEN_PORT:-22}"
     
     # Copy keys if supplied
     mkdir -p /etc/ssh
 
     if [ -f /keys/id_rsa ]; then
+        echo "[mcp-ssh-gateway] Copying private SSH host key from /keys/id_rsa"
         cp /keys/id_rsa /etc/ssh/ssh_host_rsa_key
         chmod 600 /etc/ssh/ssh_host_rsa_key
     fi
 
     if [ -f /keys/id_rsa.pub ]; then
+        echo "[mcp-ssh-gateway] Copying SSH public host key from /keys/id_rsa.pub"
         cp /keys/id_rsa.pub /etc/ssh/ssh_host_rsa_key.pub
         chmod 644 /etc/ssh/ssh_host_rsa_key.pub
+    fi
+
+    if [ -f /keys/id_rsa ]; then
+        echo "[mcp-ssh-gateway] Copying SSH authorized keys from /keys/authorized_keys"
+        cp /keys/authorized_keys /etc/ssh/authorized_keys
+        chmod 600 /etc/ssh/authorized_keys
     fi
 
     # Ensure SSH host keys exist
@@ -28,13 +36,22 @@ if [ "$GATEWAY_MODE" = "inbound" ]; then
 
     # Create default config if needed
     echo "[mcp-ssh-gateway] Configuring SSH daemon..."
+
     echo "Port ${SSH_LISTEN_PORT}" > /etc/ssh/sshd_config
-    echo "PermitRootLogin no" >> /etc/ssh/sshd_config
+    echo "PermitRootLogin prohibit-password" >> /etc/ssh/sshd_config # can be tightened
     echo "PasswordAuthentication no" >> /etc/ssh/sshd_config
     echo "PermitEmptyPasswords no" >> /etc/ssh/sshd_config
     echo "ChallengeResponseAuthentication no" >> /etc/ssh/sshd_config
     echo "UsePAM no" >> /etc/ssh/sshd_config
-    echo "AuthorizedKeysFile /keys/authorized_keys" >> /etc/ssh/sshd_config
+
+    echo "GatewayPorts yes" >> /etc/ssh/sshd_config
+    echo "AllowTcpForwarding yes" >> /etc/ssh/sshd_config
+    echo "PermitOpen any" >> /etc/ssh/sshd_config # can be tightened 
+
+    echo "AuthorizedKeysFile /etc/ssh/authorized_keys" >> /etc/ssh/sshd_config
+
+    # Ensure privilege separation directory exists
+    mkdir -p /run/sshd
 
     # Start SSH server
     exec /usr/sbin/sshd -D -e
