@@ -38,5 +38,5 @@ else
     fi
 
     # Start the agent (MCP loop)
-    exec python3 /app/agent/main.py
+    exec mcpo python3 /app/agent.py
 fi
