@@ -36,7 +36,7 @@ else
     if [ ! -f /keys/authorized_keys ]; then
         echo "[WARNING] No authorized_keys found. You must register edges at runtime."
     fi
-
-    # Start the agent (MCP loop)
-    exec mcpo python3 /app/agent.py
 fi
+
+# Start the agent (MCP loop)
+exec mcpo --host 0.0.0.0 --port 8000 python3 /app/agent.py

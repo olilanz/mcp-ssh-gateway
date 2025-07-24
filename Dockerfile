@@ -26,8 +26,12 @@ COPY entrypoint.sh /entrypoint.sh
 # Ensure entrypoint is executable
 RUN chmod +x /entrypoint.sh
 
-# Expose SSH port
+# Expose MCP port
+EXPOSE 8000
+
+# Expose SSH port (only used in inbound mode)
 EXPOSE 2222
+
 
 # Default entrypoint
 ENTRYPOINT ["/entrypoint.sh"]
