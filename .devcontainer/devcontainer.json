@@ -28,6 +28,7 @@
     "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached"
   ],
   "forwardPorts": [
-    7860
-  ]
+    "2022:22"
+  ],
+  "postCreateCommand": "echo 'source /opt/venv/bin/activate' >> ~/.bashrc"
 }
