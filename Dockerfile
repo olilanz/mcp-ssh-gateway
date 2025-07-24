@@ -15,10 +15,10 @@ RUN python3 -m venv /opt/venv
 
 # Activate venv and install mcpo inside
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir mcpo
+RUN pip install --no-cache-dir mcp-agent mcpo
 
 # Copy application code
-COPY ./agent.py /app
+COPY ./app.py /app
 COPY ./agent /app/agent
 COPY ./scripts /app/scripts
 COPY entrypoint.sh /entrypoint.sh

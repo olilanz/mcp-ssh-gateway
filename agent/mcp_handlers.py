@@ -1,32 +1,56 @@
-# agent/mcp_handlers.py
-
-import os
+import logging
 
 def get_status():
-    return {"status": "online", "mode": os.getenv("GATEWAY_MODE", "reverse")}
-
-def register_edge_key(public_key: str, token: str):
-    expected_token = os.getenv("PROVISION_TOKEN")
-    if token != expected_token:
-        raise PermissionError("Invalid provision token")
-
-    with open("/keys/authorized_keys", "a") as f:
-        f.write(public_key.strip() + "\n")
-
-    return {"message": "Key registered"}
-
-def get_agent_pubkey():
-    with open("/keys/host_rsa.pub", "r") as f:
-        return {"public_key": f.read().strip()}
-
-def run_command(command: str):
-    from .ssh_controller import exec_remote_command
-    return exec_remote_command(command)
-
-def upload_file(path: str, content: str):
-    from .ssh_controller import upload_remote_file
-    return upload_remote_file(path, content)
+    logging.debug("get_status called")
+    return {"status": "ok"}
 
 def get_device_info():
-    from .ssh_controller import gather_device_info
-    return gather_device_info()
+    import platform
+    logging.debug("get_device_info called")
+    return {
+        "system": platform.system(),
+        "release": platform.release(),
+        "machine": platform.machine()
+    }
+
+def run_command(cmd):
+    import subprocess
+    logging.debug(f"run_command called: {cmd}")
+    try:
+        result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+        return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.returncode}
+    except subprocess.CalledProcessError as e:
+        return {"stdout": e.stdout, "stderr": e.stderr, "exit_code": e.returncode}
+
+def upload_file(path, data_b64, mode="0644"):
+    import base64
+    import os
+
+    logging.debug(f"upload_file called for {path} with mode {mode}")
+    decoded = base64.b64decode(data_b64)
+    with open(path, "wb") as f:
+        f.write(decoded)
+    os.chmod(path, int(mode, 8))
+    return {"status": "written", "path": path}
+
+def get_agent_pubkey():
+    key_path = "/data/keys/id_rsa.pub"
+    try:
+        with open(key_path, "r") as f:
+            pubkey = f.read().strip()
+        logging.debug("Agent public key loaded.")
+        return {"public_key": pubkey}
+    except Exception as e:
+        logging.error(f"Failed to load public key: {e}")
+        return {"error": str(e)}
+
+def register_edge_key(key_data, filename="edge_authorized.pub"):
+    path = f"/data/keys/{filename}"
+    try:
+        with open(path, "w") as f:
+            f.write(key_data.strip() + "\n")
+        logging.info(f"Edge public key saved to {path}")
+        return {"status": "registered", "file": path}
+    except Exception as e:
+        logging.error(f"Failed to write edge key: {e}")
+        return {"error": str(e)}

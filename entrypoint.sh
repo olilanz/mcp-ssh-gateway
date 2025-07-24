@@ -49,4 +49,4 @@ else
 fi
 
 # Start the agent (MCP loop)
-exec mcpo --host 0.0.0.0 --port ${MCPO_PORT} python3 /app/agent.py
+exec mcpo --host 0.0.0.0 --port ${MCPO_PORT} python3 /app/app.py
