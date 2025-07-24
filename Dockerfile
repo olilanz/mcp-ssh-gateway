@@ -26,12 +26,14 @@ COPY entrypoint.sh /entrypoint.sh
 # Ensure entrypoint is executable
 RUN chmod +x /entrypoint.sh
 
-# Expose MCP port
-EXPOSE 8000
+# fundamental configuration
+ENV GATEWAY_MODE=inbound
+ENV SSH_LISTEN_PORT=22
+ENV SSH_REVERSE_PORT=2222
+ENV MCPO_PORT=8000
 
-# Expose SSH port (only used in inbound mode)
-EXPOSE 2222
-
+EXPOSE ${MCPO_PORT}
+EXPOSE ${SSH_PORT}
 
 # Default entrypoint
 ENTRYPOINT ["/entrypoint.sh"]

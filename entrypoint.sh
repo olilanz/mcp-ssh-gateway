@@ -7,18 +7,28 @@ echo "[mcp-ssh-gateway] Starting in $GATEWAY_MODE mode"
 if [ "$GATEWAY_MODE" = "inbound" ]; then
     echo "[mcp-ssh-gateway] Launching sshd in inbound mode on port ${SSH_PORT:-2222}"
     
+    # Copy keys if supplied
+    mkdir -p /etc/ssh
+
+    if [ -f /keys/id_rsa ]; then
+        cp /keys/id_rsa /etc/ssh/ssh_host_rsa_key
+        chmod 600 /etc/ssh/ssh_host_rsa_key
+    fi
+
+    if [ -f /keys/id_rsa.pub ]; then
+        cp /keys/id_rsa.pub /etc/ssh/ssh_host_rsa_key.pub
+        chmod 644 /etc/ssh/ssh_host_rsa_key.pub
+    fi
+
     # Ensure SSH host keys exist
-    if [ ! -f /keys/host_rsa ]; then
-        echo "[ERROR] SSH host key /keys/host_rsa not found."
+    if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then
+        echo "[ERROR] SSH host key /etc/ssh/ssh_host_rsa_key not found."
         exit 1
     fi
-    mkdir -p /etc/ssh
-    cp /keys/host_rsa /etc/ssh/ssh_host_rsa_key
-    chmod 600 /etc/ssh/ssh_host_rsa_key
 
     # Create default config if needed
     echo "[mcp-ssh-gateway] Configuring SSH daemon..."
-    echo "Port ${SSH_PORT:-2222}" > /etc/ssh/sshd_config
+    echo "Port ${SSH_LISTEN_PORT}" > /etc/ssh/sshd_config
     echo "PermitRootLogin no" >> /etc/ssh/sshd_config
     echo "PasswordAuthentication no" >> /etc/ssh/sshd_config
     echo "PermitEmptyPasswords no" >> /etc/ssh/sshd_config
@@ -39,4 +49,4 @@ else
 fi
 
 # Start the agent (MCP loop)
-exec mcpo --host 0.0.0.0 --port 8000 python3 /app/agent.py
+exec mcpo --host 0.0.0.0 --port ${MCPO_PORT} python3 /app/agent.py

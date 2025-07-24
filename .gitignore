@@ -5,3 +5,6 @@ __pycache__/
 *.db
 *.sqlite
 *.log
+
+# Ddon't commit the dev keys. They are only used for local development and testing.
+/devkeys/

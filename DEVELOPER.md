@@ -133,3 +133,36 @@ Agent logs to STDOUT. You can attach to the container or view logs via `docker l
 This project is built for **experimentation**, **security research**, and **empowered system introspection**. Treat it as a programmable control surface — and respect the boundaries it enforces.
 
 For questions or collaboration, please open a GitHub issue or contribute via pull request.
+---
+
+## 🔑 Development Keys Setup
+
+The `/devkeys` folder is used to store development SSH key pairs. These keys are ignored by Git to ensure they are not accidentally committed to the repository.
+
+### Steps to Set Up Development Keys
+
+1. After cloning the repository, create the `/devkeys` folder:
+   ```bash
+   mkdir -p /workspaces/mcp-ssh-gateway/devkeys
+   ```
+
+2. Generate a new SSH key pair for development:
+   ```bash
+   ssh-keygen -t rsa -b 2048 -f /workspaces/mcp-ssh-gateway/devkeys/id_rsa -N ""
+   ```
+
+3. Ensure the public key has the correct permissions:
+   ```bash
+   chmod 644 /workspaces/mcp-ssh-gateway/devkeys/id_rsa.pub
+   ```
+
+4. Add the `/devkeys` folder to your `.gitignore` file to prevent accidental commits.
+
+### Trusted Hosts Configuration
+
+If your development environment requires connecting to specific hosts, ensure they are added to the SSH `known_hosts` file. This can be done manually or by connecting to the host once:
+   ```bash
+   ssh-keyscan -H <hostname> >> ~/.ssh/known_hosts
+   ```
+
+This ensures secure and trusted connections during development.

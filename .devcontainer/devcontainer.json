@@ -25,6 +25,7 @@
   },
   "mounts": [
     "source=${localWorkspaceFolder}/,target=/workspace,type=bind",
+    "source=${localWorkspaceFolder}/devkeys,target=/keys,type=bind",
     "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached"
   ],
   "forwardPorts": [
