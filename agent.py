@@ -21,19 +21,13 @@ def load_config(config_path):
             }
     return None
 
-def load_environment_variables(env_path):
-    if env_path and os.path.exists(env_path):
-        with open(env_path, "r") as file:
-            for line in file:
-                key, value = line.strip().split("=", 1)
-                os.environ[key] = value
 
 def main():
     args = parse_arguments()
-    config = load_config(args.config)
-    load_environment_variables(args.env)
+    config = load_config(args.config) or {}
 
-    threading.Thread(target=monitor_ssh_connection, daemon=True).start()
+    listener_port = config.get("port", 2222)
+    threading.Thread(target=monitor_ssh_connection, args=(listener_port,), daemon=True).start()
 
     for line in sys.stdin:
         if line.strip():
