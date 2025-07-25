@@ -45,7 +45,7 @@ if [ "$GATEWAY_MODE" = "inbound" ]; then
     echo "UsePAM no" >> /etc/ssh/sshd_config
 
     echo "PermitTTY no" >> /etc/ssh/sshd_config
-    echo "ForceCommand echo 'SSH access is restricted to tunneling only.'" >> /etc/ssh/sshd_config
+    echo "ForceCommand /app/scripts/force_command.sh" >> /etc/ssh/sshd_config
 
     echo "GatewayPorts yes" >> /etc/ssh/sshd_config
     echo "AllowTcpForwarding yes" >> /etc/ssh/sshd_config

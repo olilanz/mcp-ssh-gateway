@@ -23,7 +23,8 @@ COPY ./agent /app/agent
 COPY ./scripts /app/scripts
 COPY entrypoint.sh /entrypoint.sh
 
-# Ensure entrypoint is executable
+# Ensure scripts are executable
+RUN chmod +x /app/scripts/*.sh
 RUN chmod +x /entrypoint.sh
 
 # fundamental configuration
