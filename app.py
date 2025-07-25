@@ -5,7 +5,6 @@ import logging
 from agent.connection_loader import load_connections, ConnectionConfigError
 from agent.connection_pool import ConnectionPool
 
-
 def configure_logging():
     logging.basicConfig(
         level=logging.INFO,

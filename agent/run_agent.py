@@ -34,14 +34,7 @@ def run_agent():
 
     # Initialize MCP Agent
     mcp = FastMCP(name="mcp-ssh-gateway")
-
-    # Register supported MCP methods
-    mcp.register("get_status", mcp_handlers.get_status)
-    mcp.register("get_device_info", mcp_handlers.get_device_info)
-    mcp.register("run_command", mcp_handlers.run_command)
-    mcp.register("upload_file", mcp_handlers.upload_file)
-    mcp.register("get_agent_pubkey", mcp_handlers.get_agent_pubkey)
-    mcp.register("register_edge_key", mcp_handlers.register_edge_key)
+    mcp_handlers.register_tools(mcp)
 
     logging.info("Agent registered all handlers. Starting MCP loop.")
     mcp.run()
