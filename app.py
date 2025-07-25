@@ -46,11 +46,6 @@ def run_agent(config_path):
     # Example usage of querying the pool state
     query_pool_state()
 
-    # Keep the connection pool running
-    logging.info("🔄 Connection pool is running. Press Ctrl+C to stop.")
-    while True:
-        time.sleep(1)
-
     # Graceful shutdown
     def shutdown_handler(sig, frame):
         logging.info("\n🔻 Received shutdown signal. Cleaning up...")
@@ -59,3 +54,9 @@ def run_agent(config_path):
 
     signal.signal(signal.SIGINT, shutdown_handler)
     signal.signal(signal.SIGTERM, shutdown_handler)
+
+    # Keep the connection pool running
+    logging.info("🔄 Connection pool is running. Press Ctrl+C to stop.")
+    while True:
+        time.sleep(1)
+
