@@ -12,8 +12,9 @@ from agent.connection_pool import ConnectionPool
 
 def parse_args():
     parser = argparse.ArgumentParser(description="MCP SSH Gateway Agent")
-    parser.add_argument("--config", type=str, required=True, help="Path to connection config JSON")
+    parser.add_argument("--config", type=str, default="default_config.json", help="Path to connection config JSON (default: default_config.json)")
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
+    logging.debug("Arguments parsed successfully.")
     return parser.parse_args()
 
 def configure_logging(debug_enabled: bool):
@@ -44,6 +45,11 @@ def run_agent(config_path):
 
     # Example usage of querying the pool state
     query_pool_state()
+
+    # Keep the connection pool running
+    print("🔄 Connection pool is running. Press Ctrl+C to stop.")
+    while True:
+        time.sleep(1)
 
     # Graceful shutdown
     def shutdown_handler(sig, frame):

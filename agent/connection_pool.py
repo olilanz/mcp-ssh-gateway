@@ -2,7 +2,7 @@ import logging
 import threading
 import time
 import subprocess
-from connection_runner import ConnectionRunner
+from agent.connection_runner import ConnectionRunner
 
 class ConnectionPool:
     def __init__(self, connection_configs):
