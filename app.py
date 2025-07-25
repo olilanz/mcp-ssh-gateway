@@ -34,7 +34,16 @@ def run_agent(config_path):
 
     pool = ConnectionPool(connections)
     pool.start_all()
-    pool.monitor()
+
+    # Expose pool state
+    def query_pool_state():
+        state = pool.expose_pool_state()
+        print("Connection Pool State:")
+        for connection in state:
+            print(connection)
+
+    # Example usage of querying the pool state
+    query_pool_state()
 
     # Graceful shutdown
     def shutdown_handler(sig, frame):
@@ -43,4 +52,4 @@ def run_agent(config_path):
         sys.exit(0)
 
     signal.signal(signal.SIGINT, shutdown_handler)
-    signal.signal(signal.SIGTERM, sh
+    signal.signal(signal.SIGTERM, shutdown_handler)
