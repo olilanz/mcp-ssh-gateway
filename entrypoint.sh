@@ -31,30 +31,13 @@ if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then
     exit 1
 fi
 
-# Create default config if needed
-echo "[mcp-ssh-gateway] Configuring SSH daemon..."
-
-echo "Port ${SSH_LISTEN_PORT}" > /etc/ssh/sshd_config
-echo "PermitRootLogin prohibit-password" >> /etc/ssh/sshd_config # can be tightened
-echo "PasswordAuthentication no" >> /etc/ssh/sshd_config
-echo "PermitEmptyPasswords no" >> /etc/ssh/sshd_config
-echo "ChallengeResponseAuthentication no" >> /etc/ssh/sshd_config
-echo "UsePAM no" >> /etc/ssh/sshd_config
-
-echo "PermitTTY no" >> /etc/ssh/sshd_config
-echo "ForceCommand echo 'This connection is for tunneling only. No command execution available.'" >> /etc/ssh/sshd_config
-
-echo "GatewayPorts yes" >> /etc/ssh/sshd_config
-echo "AllowTcpForwarding yes" >> /etc/ssh/sshd_config
-echo "PermitOpen any" >> /etc/ssh/sshd_config # can be tightened 
-
-echo "AuthorizedKeysFile /etc/ssh/authorized_keys" >> /etc/ssh/sshd_config
-
 # Ensure privilege separation directory exists
 mkdir -p /run/sshd
 
-# Start SSH server
-exec /usr/sbin/sshd -D -e
+
+# Start the SSH daemon as a service
+echo "[mcp-ssh-gateway] Starting sshd service"
+service ssh start
 
 # Start the agent (MCP loop)
-exec mcpo --host 0.0.0.0 --port ${MCPO_PORT} python3 /app/app.py
+exec mcpo --host 0.0.0.0 --port ${MCPO_PORT} -- python3 /app/app.py

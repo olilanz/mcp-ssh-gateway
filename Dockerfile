@@ -1,5 +1,9 @@
 FROM ubuntu:24.04
 
+# fundamental configuration
+ENV SSH_LISTEN_PORT=22
+ENV MCPO_PORT=8000
+
 # Install required packages
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
@@ -9,29 +13,39 @@ RUN apt-get update && \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Create working directory and virtual environment
-WORKDIR /app
-RUN python3 -m venv /opt/venv
+# Configure SSH daemon during build
+RUN mkdir -p /etc/ssh && \
+    echo "Port ${SSH_LISTEN_PORT}" > /etc/ssh/sshd_config && \
+    echo "PermitRootLogin prohibit-password" >> /etc/ssh/sshd_config && \
+    echo "PasswordAuthentication no" >> /etc/ssh/sshd_config && \
+    echo "PermitEmptyPasswords no" >> /etc/ssh/sshd_config && \
+    echo "ChallengeResponseAuthentication no" >> /etc/ssh/sshd_config && \
+    echo "UsePAM no" >> /etc/ssh/sshd_config && \
+    echo "PermitTTY no" >> /etc/ssh/sshd_config && \
+    echo "ForceCommand echo 'This connection is for tunneling only. No command execution available.'" >> /etc/ssh/sshd_config && \
+    echo "GatewayPorts yes" >> /etc/ssh/sshd_config && \
+    echo "AllowTcpForwarding yes" >> /etc/ssh/sshd_config && \
+    echo "PermitOpen any" >> /etc/ssh/sshd_config && \
+    echo "AuthorizedKeysFile /etc/ssh/authorized_keys" >> /etc/ssh/sshd_config
 
 # Activate venv and install mcpo inside
+RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir mcp-agent mcpo
 
-# Copy application code
-COPY ./app.py /app
-COPY ./agent /app/agent
-COPY ./scripts /app/scripts
+# startup script
 COPY entrypoint.sh /entrypoint.sh
-
-# Ensure scripts are executable
-RUN chmod +x /app/scripts/*.sh
 RUN chmod +x /entrypoint.sh
 
-# fundamental configuration
-ENV SSH_LISTEN_PORT=22
-ENV SSH_REVERSE_PORT=2222
-ENV MCPO_PORT=8000
+# application code
+COPY ./app.py /app/app.py
+COPY ./agent /app/agent
 
+# helper scripts
+COPY ./scripts /app/scripts
+RUN chmod +x /app/scripts/*.sh
+
+# port configuration
 EXPOSE ${MCPO_PORT}
 EXPOSE ${SSH_LISTEN_PORT}
 
