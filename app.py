@@ -22,7 +22,7 @@ def configure_logging(debug_enabled: bool):
     logging.basicConfig(
         level=log_level,
         format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)]
+        handlers=[logging.StreamHandler(sys.stderr)]
     )
     logging.debug("Logging configured for DEBUG level.")
 
@@ -30,7 +30,7 @@ def run_agent(config_path):
     try:
         connections = load_config(config_path)
     except (FileNotFoundError, ConnectionConfigError) as e:
-        print(f"❌ Configuration error: {e}")
+        logging.error(f"❌ Configuration error: {e}")
         sys.exit(1)
 
     pool = ConnectionPool(connections)
@@ -39,21 +39,21 @@ def run_agent(config_path):
     # Expose pool state
     def query_pool_state():
         state = pool.expose_pool_state()
-        print("Connection Pool State:")
+        logging.info("Connection Pool State:")
         for connection in state:
-            print(connection)
+            logging.info(connection)
 
     # Example usage of querying the pool state
     query_pool_state()
 
     # Keep the connection pool running
-    print("🔄 Connection pool is running. Press Ctrl+C to stop.")
+    logging.info("🔄 Connection pool is running. Press Ctrl+C to stop.")
     while True:
         time.sleep(1)
 
     # Graceful shutdown
     def shutdown_handler(sig, frame):
-        print("\n🔻 Received shutdown signal. Cleaning up...")
+        logging.info("\n🔻 Received shutdown signal. Cleaning up...")
         pool.stop_all()
         sys.exit(0)
 

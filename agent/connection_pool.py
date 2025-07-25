@@ -19,13 +19,13 @@ class ConnectionPool:
             try:
                 result = subprocess.run(
                     ["scripts/os_info.sh"],
-                    capture_output=True,
+                    stderr=subprocess.PIPE,
                     text=True,
                     check=True
                 )
                 self.os_info_cache[runner.name] = result.stdout.strip()
             except subprocess.CalledProcessError as e:
-                logging.error(f"Failed to gather OS info for {runner.name}: {e}")
+                logging.error(f"❌ Failed to gather OS info for {runner.name}: {e}")
 
     def start_all(self):
         logging.info("🚀 Starting all connections...")

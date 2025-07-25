@@ -1,3 +1,4 @@
+import logging
 import json
 import os
 import sys
@@ -40,7 +41,7 @@ def load_config(path):
         if not id_file or not isinstance(id_file, str):
             raise ConnectionConfigError(f"{context} Missing or invalid 'id_file'")
         if not os.path.isfile(id_file):
-            print(f"⚠️ Warning: Identity file not found at path '{id_file}'")
+            logging.warning(f"⚠️ Warning: Identity file not found at path '{id_file}'")
 
         mode = conn.get("mode")
         if mode not in ("direct", "tunnel"):
@@ -64,5 +65,5 @@ def load_config(path):
             "host": host if mode == "direct" else None
         })
 
-    print(f"✅ Loaded {len(validated_connections)} connection(s) successfully from {path}")
+    logging.info(f"✅ Loaded {len(validated_connections)} connection(s) successfully from {path}")
     return validated_connections
