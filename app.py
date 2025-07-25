@@ -4,29 +4,17 @@ import argparse
 import os
 import sys
 import logging
+import signal
+import time
 
-from agent.main import run_agent
+from agent.connection_loader import load_config, ConnectionConfigError
+from agent.connection_pool import ConnectionPool
 
-def parse_config():
+def parse_args():
     parser = argparse.ArgumentParser(description="MCP SSH Gateway Agent")
-
-    parser.add_argument("--ssh-reverse-port", type=int, required=True, help="SSH listening port (e.g. 2222)")
-    parser.add_argument("--key-dir", type=str, required=True, help="Directory containing RSA keys")
-    parser.add_argument("--mode", choices=["reverse", "forward"], default="reverse", help="SSH connection mode")
+    parser.add_argument("--config", type=str, required=True, help="Path to connection config JSON")
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
-
-    args = parser.parse_args()
-
-    # Validation
-    if args.ssh_reverse_port < 1 or args.ssh_reverse_port > 65535:
-        print("Error: Invalid SSH reverse port number.")
-        sys.exit(1)
-
-    if not os.path.isdir(args.key_dir):
-        print(f"Error: Key directory '{args.key_dir}' does not exist.")
-        sys.exit(1)
-
-    return args
+    return parser.parse_args()
 
 def configure_logging(debug_enabled: bool):
     log_level = logging.DEBUG if debug_enabled else logging.INFO
@@ -37,10 +25,22 @@ def configure_logging(debug_enabled: bool):
     )
     logging.debug("Logging configured for DEBUG level.")
 
-def main():
-    config = parse_config()
-    configure_logging(config.debug)
-    run_agent(config)
+def run_agent(config_path):
+    try:
+        connections = load_config(config_path)
+    except (FileNotFoundError, ConnectionConfigError) as e:
+        print(f"❌ Configuration error: {e}")
+        sys.exit(1)
 
-if __name__ == "__main__":
-    main()
+    pool = ConnectionPool(connections)
+    pool.start_all()
+    pool.monitor()
+
+    # Graceful shutdown
+    def shutdown_handler(sig, frame):
+        print("\n🔻 Received shutdown signal. Cleaning up...")
+        pool.stop_all()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, shutdown_handler)
+    signal.signal(signal.SIGTERM, sh

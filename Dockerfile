@@ -28,7 +28,6 @@ RUN chmod +x /app/scripts/*.sh
 RUN chmod +x /entrypoint.sh
 
 # fundamental configuration
-ENV GATEWAY_MODE=inbound
 ENV SSH_LISTEN_PORT=22
 ENV SSH_REVERSE_PORT=2222
 ENV MCPO_PORT=8000
