@@ -1,10 +1,16 @@
 import logging
 
-def get_status():
+from mcp.agent import Agent
+
+agent = Agent(name="mcp-ssh-gateway")
+
+@agent.method("get_status")
+def get_status(params):
     logging.debug("get_status called")
     return {"status": "ok"}
 
-def get_device_info():
+@agent.method("get_device_info")
+def get_device_info(params):
     import platform
     logging.debug("get_device_info called")
     return {
@@ -13,8 +19,10 @@ def get_device_info():
         "machine": platform.machine()
     }
 
-def run_command(cmd):
+@agent.method("run_command")
+def run_command(params):
     import subprocess
+    cmd = params.get("cmd")
     logging.debug(f"run_command called: {cmd}")
     try:
         result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)

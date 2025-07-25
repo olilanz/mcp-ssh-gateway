@@ -9,9 +9,10 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     openssh-server \
     python3-pip \
-    python3-venv \
     git \
     && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --break-system-packages mcp[cli] mcpo
 
 # Configure SSH daemon during build
 RUN mkdir -p /etc/ssh && \
@@ -27,11 +28,6 @@ RUN mkdir -p /etc/ssh && \
     echo "AllowTcpForwarding yes" >> /etc/ssh/sshd_config && \
     echo "PermitOpen any" >> /etc/ssh/sshd_config && \
     echo "AuthorizedKeysFile /etc/ssh/authorized_keys" >> /etc/ssh/sshd_config
-
-# Activate venv and install mcpo inside
-RUN python3 -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir mcp-agent mcpo
 
 # environment setup
 EXPOSE ${MCPO_PORT}

@@ -31,5 +31,5 @@
   "forwardPorts": [
     "2022:22"
   ],
-  "postCreateCommand": "echo 'source /opt/venv/bin/activate' >> ~/.bashrc && rm -rf /app && ln -s /workspaces/mcp-ssh-gateway /app"
+  "postCreateCommand": "rm -rf /app && ln -s /workspaces/mcp-ssh-gateway /app"
 }
