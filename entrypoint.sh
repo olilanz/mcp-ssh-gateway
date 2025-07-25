@@ -9,19 +9,19 @@ mkdir -p /etc/ssh
 
 if [ -f /keys/id_rsa ]; then
     echo "[mcp-ssh-gateway] Copying private SSH host key from /keys/id_rsa"
-    cp /keys/id_rsa /etc/ssh/ssh_host_rsa_key
+    cp /data/keys/id_rsa /etc/ssh/ssh_host_rsa_key
     chmod 600 /etc/ssh/ssh_host_rsa_key
 fi
 
 if [ -f /keys/id_rsa.pub ]; then
     echo "[mcp-ssh-gateway] Copying SSH public host key from /keys/id_rsa.pub"
-    cp /keys/id_rsa.pub /etc/ssh/ssh_host_rsa_key.pub
+    cp /data/keys/id_rsa.pub /etc/ssh/ssh_host_rsa_key.pub
     chmod 644 /etc/ssh/ssh_host_rsa_key.pub
 fi
 
 if [ -f /keys/id_rsa ]; then
     echo "[mcp-ssh-gateway] Copying SSH authorized keys from /keys/authorized_keys"
-    cp /keys/authorized_keys /etc/ssh/authorized_keys
+    cp /data/keys/authorized_keys /etc/ssh/authorized_keys
     chmod 600 /etc/ssh/authorized_keys
 fi
 
@@ -40,4 +40,4 @@ echo "[mcp-ssh-gateway] Starting sshd service"
 service ssh start
 
 # Start the agent (MCP loop)
-exec mcpo --host 0.0.0.0 --port ${MCPO_PORT} -- python3 /app/app.py
+exec mcpo --host 0.0.0.0 --port ${MCPO_PORT} -- python3 /app/app.py --config /data/config/connections.json

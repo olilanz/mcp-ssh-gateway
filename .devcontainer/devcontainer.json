@@ -24,12 +24,12 @@
     }
   },
   "mounts": [
-    "source=${localWorkspaceFolder}/,target=/workspace,type=bind",
-    "source=${localWorkspaceFolder}/devkeys,target=/keys,type=bind",
+    "source=${localWorkspaceFolder}/.devcontainer/devkeys,target=/data/keys,type=bind",
+    "source=${localWorkspaceFolder}/.devcontainer/devconfig,target=/data/config,type=bind",
     "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached"
   ],
   "forwardPorts": [
     "2022:22"
   ],
-  "postCreateCommand": "echo 'source /opt/venv/bin/activate' >> ~/.bashrc"
+  "postCreateCommand": "echo 'source /opt/venv/bin/activate' >> ~/.bashrc && rm -rf /app && ln -s /workspaces/mcp-ssh-gateway /app"
 }

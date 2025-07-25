@@ -33,21 +33,22 @@ RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir mcp-agent mcpo
 
-# startup script
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-# application code
-COPY ./app.py /app/app.py
-COPY ./agent /app/agent
-
-# helper scripts
-COPY ./scripts /app/scripts
-RUN chmod +x /app/scripts/*.sh
-
-# port configuration
+# environment setup
 EXPOSE ${MCPO_PORT}
 EXPOSE ${SSH_LISTEN_PORT}
 
+# startup script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# application code
+COPY app.py /app/app.py
+COPY agent /app/agent
+
+# helper scripts
+COPY scripts /app/scripts
+RUN chmod +x /app/scripts/*.sh
+
 # Default entrypoint
-ENTRYPOINT ["/entrypoint.sh"]
+WORKDIR /app
+ENTRYPOINT ["entrypoint.sh"]

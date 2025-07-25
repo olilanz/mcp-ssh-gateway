@@ -7,7 +7,7 @@ class ConnectionConfigError(Exception):
     """Raised when the connection configuration is invalid."""
     pass
 
-def load_config(path):
+def load_connections(path):
     """Load and validate the agent configuration from a JSON file."""
     if not os.path.exists(path):
         raise FileNotFoundError(f"❌ Config file not found: {path}")

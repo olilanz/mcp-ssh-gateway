@@ -7,4 +7,5 @@ __pycache__/
 *.log
 
 # Ddon't commit the dev keys. They are only used for local development and testing.
-/devkeys/
+.devcontainer/devkeys/*
+.devcontainer/devconfig/*

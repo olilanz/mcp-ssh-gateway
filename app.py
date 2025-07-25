@@ -7,12 +7,12 @@ import logging
 import signal
 import time
 
-from agent.connection_loader import load_config, ConnectionConfigError
+from agent.connection_loader import load_connections, ConnectionConfigError
 from agent.connection_pool import ConnectionPool
 
 def parse_args():
     parser = argparse.ArgumentParser(description="MCP SSH Gateway Agent")
-    parser.add_argument("--config", type=str, default="default_config.json", help="Path to connection config JSON (default: default_config.json)")
+    parser.add_argument("--connection-config", type=str, default="connections.json", help="Path to connection config JSON (default: connections.json)")
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
     logging.debug("Arguments parsed successfully.")
     return parser.parse_args()
@@ -28,7 +28,7 @@ def configure_logging(debug_enabled: bool):
 
 def run_agent(config_path):
     try:
-        connections = load_config(config_path)
+        connections = load_connections(config_path)
     except (FileNotFoundError, ConnectionConfigError) as e:
         logging.error(f"❌ Configuration error: {e}")
         sys.exit(1)
