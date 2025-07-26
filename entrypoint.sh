@@ -40,4 +40,4 @@ echo "[mcp-ssh-gateway] Starting sshd service"
 service ssh start
 
 # Start the agent (MCP loop)
-exec mcpo --host 0.0.0.0 --port ${MCPO_PORT} -- python3 /app/app.py --config /data/config/connections.json
+exec mcpo --host 0.0.0.0 --port ${MCPO_PORT} -- python3 /app/app.py --connection-config /data/config/connections.json
