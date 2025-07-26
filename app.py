@@ -15,6 +15,20 @@ def configure_logging():
 from agent.run_agent import run_agent
 
 if __name__ == "__main__":
+    import argparse
+
     configure_logging()
-    run_agent()
+
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="MCP Agent")
+    parser.add_argument(
+        "--connection-config",
+        type=str,
+        default="connections.json",
+        help="Path to the connection configuration file (default: connections.json)"
+    )
+    args = parser.parse_args()
+
+    # Pass the configuration file path to run_agent
+    run_agent(config_path=args.connection_config)
 

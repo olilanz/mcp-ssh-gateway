@@ -4,7 +4,7 @@ from agent.connection_loader import ConnectionConfigError
 import time
 from agent import mcp_handlers
 
-def run_agent():
+def run_agent(config_path="connections.json"):
     from agent.connection_loader import load_connections
     from agent.connection_pool import ConnectionPool
     import signal
@@ -14,7 +14,7 @@ def run_agent():
 
     # Load connection configuration
     try:
-        connections = load_connections("connections.json")
+        connections = load_connections(config_path)
     except (FileNotFoundError, ConnectionConfigError) as e:
         logging.error(f"❌ Configuration error: {e}")
         sys.exit(1)

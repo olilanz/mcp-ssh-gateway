@@ -9,9 +9,22 @@ class ConnectionPool:
         self.runners = []
         self.os_info_cache = {}
         self.lock = threading.Lock()  # Ensure thread safety for os_info_cache
-        for config in connection_configs:
+        self.connection_configs = self.validate_and_parse_configs(connection_configs)
+        for config in self.connection_configs:
             runner = ConnectionRunner(config)
             self.runners.append(runner)
+
+    def validate_and_parse_configs(self, connection_configs):
+        """Validate and parse connection configurations."""
+        validated_configs = []
+        for config in connection_configs:
+            if "name" not in config or "host" not in config:
+                logging.error(f"❌ Invalid configuration: {config}")
+                continue
+            validated_configs.append(config)
+        if not validated_configs:
+            raise ValueError("No valid connection configurations provided.")
+        return validated_configs
 
     def gather_os_info(self, runner):
         """Gather OS info for a specific connection."""
@@ -23,9 +36,12 @@ class ConnectionPool:
                     text=True,
                     check=True
                 )
-                self.os_info_cache[runner.name] = result.stdout.strip()
+                if result.stdout:
+                    self.os_info_cache[runner.name] = result.stdout.strip()
+                else:
+                    logging.error(f"❌ No output received for OS info on {runner.name}.")
             except subprocess.CalledProcessError as e:
-                logging.error(f"❌ Failed to gather OS info for {runner.name}: {e}")
+                logging.error(f"❌ Failed to gather OS info for {runner.name}: {e}", exc_info=True)
 
     def start_all(self):
         logging.info("🚀 Starting all connections...")
@@ -66,10 +82,24 @@ class ConnectionPool:
                 state = {
                     "name": runner.name,
                     "is_running": runner.is_running(),
-                    "os_info": self.os_info_cache.get(runner.name, "No OS info cached")
+                    "os_info": self.os_info_cache.get(runner.name, "No OS info cached"),
+                    "connection_state": runner.get_connection_state()
                 }
                 pool_state.append(state)
             return pool_state
+
+    def send_command(self, connection_name, command):
+        """Send a command to a specific connection and retrieve the output."""
+        with self.lock:
+            for runner in self.runners:
+                if runner.name == connection_name:
+                    try:
+                        return runner.execute_command(command)
+                    except Exception as e:
+                        logging.error(f"❌ Failed to execute command on {connection_name}: {e}")
+                        return None
+            logging.warning(f"⚠️ Connection {connection_name} not found.")
+            return None
 
     def expose_pool_state(self):
         """Expose the connection pool state for external querying."""
