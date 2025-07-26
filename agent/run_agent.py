@@ -1,12 +1,12 @@
 import logging
 from mcp.server.fastmcp import FastMCP
-from connectionpool.connection_loader import ConnectionConfigError
+from agent.connectionpool.errors import ConnectionConfigError
 import time
 from agent import mcp_handlers
 
 def run_agent(config_path="connections.json"):
-    from agent.connectionpool.connection_loader import load_connections
-    from agent.connectionpool.connection_pool import ConnectionPool
+    from agent.connectionpool.loader import load_connections
+    from agent.connectionpool.pool import ConnectionPool
     import signal
     import sys
 

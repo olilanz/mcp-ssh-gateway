@@ -8,12 +8,12 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s')
 class ConnectionRunner:
     def __init__(self, connection_config):
         self.config = connection_config
-        self.name = connection_config["name"]
-        self.user = connection_config["user"]
-        self.id_file = connection_config["id_file"]
-        self.mode = connection_config["mode"]
-        self.port = connection_config["port"]
-        self.host = connection_config.get("host")  # Only required for "direct"
+        self.name = connection_config.name
+        self.user = connection_config.user
+        self.id_file = connection_config.id_file
+        self.mode = connection_config.mode
+        self.port = connection_config.port
+        self.host = connection_config.host  # Only required for "direct"
 
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
@@ -71,4 +71,25 @@ class ConnectionRunner:
         else:
             raise ValueError(f"Unknown mode: {self.mode}")
 
+        return base_cmd
+
+        if self.mode == "direct":
+            local_forward = f"{self.port}:localhost:22"
+            base_cmd += ["-L", local_forward, f"{self.user}@{self.host}", "-p", str(self.port)]
+        elif self.mode == "tunnel":
+            reverse_forward = f"{self.port}:localhost:22"
+            base_cmd += ["-R", reverse_forward, f"{self.user}@localhost"]
+        else:
+            raise ValueError(f"Unknown mode: {self.mode}")
+    
+            return base_cmd
+
+    def get_connection_state(self):
+        """Retrieve the current state of the connection."""
+        if self._process and self._process.poll() is None:
+            return "running"
+        elif self._stop_event.is_set():
+            return "stopped"
+        else:
+            return "not running"
         return base_cmd

@@ -2,7 +2,7 @@ import logging
 import threading
 import time
 import subprocess
-from .connection_runner import ConnectionRunner
+from .connection import ConnectionRunner
 
 class ConnectionPool:
     def __init__(self, connection_configs):
@@ -18,7 +18,7 @@ class ConnectionPool:
         """Validate and parse connection configurations."""
         validated_configs = []
         for config in connection_configs:
-            if "name" not in config or "host" not in config:
+            if not config.name or (config.mode == "direct" and not config.host):
                 logging.error(f"❌ Invalid configuration: {config}")
                 continue
             validated_configs.append(config)

@@ -2,8 +2,8 @@
 
 import logging
 
-from agent.connectionpool.connection_loader import load_connections, ConnectionConfigError
-from agent.connectionpool.connection_pool import ConnectionPool
+from agent.connectionpool.loader import load_connections, ConnectionConfigError
+from agent.connectionpool.pool import ConnectionPool
 
 def configure_logging():
     logging.basicConfig(
