@@ -1,12 +1,12 @@
 import logging
 from mcp.server.fastmcp import FastMCP
-from agent.connection_loader import ConnectionConfigError
+from connectionpool.connection_loader import ConnectionConfigError
 import time
 from agent import mcp_handlers
 
 def run_agent(config_path="connections.json"):
-    from agent.connection_loader import load_connections
-    from agent.connection_pool import ConnectionPool
+    from agent.connectionpool.connection_loader import load_connections
+    from agent.connectionpool.connection_pool import ConnectionPool
     import signal
     import sys
 
@@ -22,6 +22,10 @@ def run_agent(config_path="connections.json"):
     # Create and start the ConnectionPool
     pool = ConnectionPool(connections)
     pool.start_all()
+
+    # Query the connection pool state and log it
+    pool_state = pool.query_pool()
+    logging.info(f"🔍 Initial connection pool state: {pool_state}")
 
     # Handle shutdown signals
     def shutdown_handler(sig, frame):

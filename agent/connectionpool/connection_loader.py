@@ -1,7 +1,6 @@
 import logging
 import json
 import os
-import sys
 
 class ConnectionConfigError(Exception):
     """Raised when the connection configuration is invalid."""
