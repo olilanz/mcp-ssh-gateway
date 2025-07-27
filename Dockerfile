@@ -47,4 +47,4 @@ RUN chmod +x /app/scripts/*.sh
 
 # Default entrypoint
 WORKDIR /app
-ENTRYPOINT ["entrypoint.sh"]
+ENTRYPOINT ["/app/entrypoint.sh"]

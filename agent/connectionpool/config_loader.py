@@ -3,6 +3,15 @@ import os
 import logging
 from dataclasses import dataclass
 from typing import Optional
+from enum import Enum
+
+class ConnectionMode(Enum):
+    DIRECT = "direct"
+    TUNNEL = "tunnel"
+
+class ConnectionConfigError(Exception):
+    """Raised when the connection configuration is invalid."""
+    pass
 
 @dataclass
 class ConnectionConfig:
@@ -12,9 +21,9 @@ class ConnectionConfig:
     mode: str  # either "direct" or "tunnel"
     port: int
     host: Optional[str]  # required for 'direct', None for 'tunnel'
-from .errors import ConnectionConfigError
 
-def load_connections(path: str) -> list[ConnectionConfig]:
+def load_connections(path: str) -> list[dict]:
+    """Load connection configurations from a file."""
     if not os.path.exists(path):
         raise FileNotFoundError(f"❌ Config file not found: {path}")
 
@@ -27,10 +36,14 @@ def load_connections(path: str) -> list[ConnectionConfig]:
     if "connections" not in data or not isinstance(data["connections"], list):
         raise ConnectionConfigError("❌ Config must contain a top-level 'connections' list")
 
+    return data["connections"]
+
+def parse_connections(raw_connections: list[dict]) -> list[ConnectionConfig]:
+    """Parse and validate raw connection configurations."""
     seen_names = set()
     validated = []
 
-    for i, conn in enumerate(data["connections"]):
+    for i, conn in enumerate(raw_connections):
         ctx = f"[connections[{i}]]"
         name = conn.get("name")
         if not name or not isinstance(name, str):
@@ -71,5 +84,10 @@ def load_connections(path: str) -> list[ConnectionConfig]:
             host=host if mode == "direct" else None
         ))
 
-    logging.info(f"✅ Loaded {len(validated)} connection(s) from {path}")
+    logging.info(f"✅ Parsed {len(validated)} connection(s).")
     return validated
+
+def load_and_parse_connections(path: str) -> list[ConnectionConfig]:
+    """Load and parse connection configurations from a file."""
+    raw_connections = load_connections(path)
+    return parse_connections(raw_connections)

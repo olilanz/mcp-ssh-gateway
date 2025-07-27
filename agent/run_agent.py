@@ -1,11 +1,11 @@
 import logging
 from mcp.server.fastmcp import FastMCP
-from agent.connectionpool.errors import ConnectionConfigError
+from agent.connectionpool.config_loader import ConnectionConfigError
 import time
 from agent import mcp_handlers
 
 def run_agent(config_path="connections.json"):
-    from agent.connectionpool.loader import load_connections
+    from agent.connectionpool.config_loader import load_and_parse_connections
     from agent.connectionpool.pool import ConnectionPool
     import signal
     import sys
@@ -14,7 +14,7 @@ def run_agent(config_path="connections.json"):
 
     # Load connection configuration
     try:
-        connections = load_connections(config_path)
+        connections = load_and_parse_connections(config_path)
     except (FileNotFoundError, ConnectionConfigError) as e:
         logging.error(f"❌ Configuration error: {e}")
         sys.exit(1)

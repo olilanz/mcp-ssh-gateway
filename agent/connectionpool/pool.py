@@ -2,29 +2,17 @@ import logging
 import threading
 import time
 import subprocess
-from .connection import ConnectionRunner
+from .connection import Connection
 
 class ConnectionPool:
     def __init__(self, connection_configs):
         self.runners = []
         self.os_info_cache = {}
         self.lock = threading.Lock()  # Ensure thread safety for os_info_cache
-        self.connection_configs = self.validate_and_parse_configs(connection_configs)
+        self.connection_configs = connection_configs
         for config in self.connection_configs:
-            runner = ConnectionRunner(config)
+            runner = Connection(config)
             self.runners.append(runner)
-
-    def validate_and_parse_configs(self, connection_configs):
-        """Validate and parse connection configurations."""
-        validated_configs = []
-        for config in connection_configs:
-            if not config.name or (config.mode == "direct" and not config.host):
-                logging.error(f"❌ Invalid configuration: {config}")
-                continue
-            validated_configs.append(config)
-        if not validated_configs:
-            raise ValueError("No valid connection configurations provided.")
-        return validated_configs
 
     def gather_os_info(self, runner):
         """Gather OS info for a specific connection."""

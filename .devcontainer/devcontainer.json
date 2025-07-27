@@ -29,7 +29,8 @@
     "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached"
   ],
   "forwardPorts": [
-    "2022:22"
+    "2022:22",
+    8000
   ],
   "postCreateCommand": "rm -rf /app && ln -s /workspaces/mcp-ssh-gateway /app"
 }
