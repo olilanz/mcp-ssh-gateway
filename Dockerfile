@@ -8,11 +8,12 @@ ENV MCPO_PORT=8000
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     openssh-server \
+    libffi-dev libssl-dev \
     python3-pip \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir --break-system-packages mcp[cli] mcpo pytest
+RUN pip install --no-cache-dir --break-system-packages mcp[cli] mcpo pytest paramiko
 
 # Configure SSH daemon during build
 RUN mkdir -p /etc/ssh && \
