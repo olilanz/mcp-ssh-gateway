@@ -28,7 +28,16 @@ def test_direct_connection(sshd_fixture):
 
     conn = Connection(config)
     conn.open()
-    assert conn.state.name == "OPEN"
+    assert conn.get_state().name == "OPEN"
+
+    result = conn.execute("echo 'Hello, World!'")
+    assert result.command == "echo 'Hello, World!'"
+    assert result.succeeded()
+    assert "Hello, World!" in result.stdout
+
     conn.close()
-    assert conn.state.name == "CLOSED"
-    conn.close()
+    assert conn.get_state().name == "CLOSED"
+
+    metadata = conn.describe()
+    assert metadata["state"] == "closed"
+    assert "Hello, World!" in metadata["history"]

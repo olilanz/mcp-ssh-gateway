@@ -6,6 +6,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s')
 
 from typing import Optional
+from agent.connection_result import CommandResult
 from enum import Enum
 from agent.connectionpool.config_loader import ConnectionMode
 
@@ -26,6 +27,7 @@ class Connection:
         self.host = connection_config.host  # Only required for "direct"
         self.state = ConnectionState.CLOSED
         self.metadata = {"os_version": None, "architecture": None}
+        self._history = []  # Track command execution history
         self._stop_event = threading.Event()
         self._process = None  # Initialize the process attribute
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
@@ -43,24 +45,39 @@ class Connection:
         self.stop()
         self.state = ConnectionState.CLOSED
 
-    def execute_command(self, command: str) -> str:
-        """Execute a command on the remote system."""
+    def execute(self, command: str) -> CommandResult:
+        """Execute a command on the remote system using paramiko."""
+        from paramiko import SSHClient, AutoAddPolicy
+        from datetime import datetime
+        from agent.connection_result import CommandResult
+
         logging.info(f"Executing command on {self.name}: {command}")
-        result = subprocess.run(command, shell=True, capture_output=True, text=True)
-        if result.returncode != 0:
-            logging.error(f"Command failed on {self.name}: {result.stderr}")
-            raise RuntimeError(f"Command execution failed: {result.stderr}")
-        return result.stdout
+        ssh = SSHClient()
+        ssh.set_missing_host_key_policy(AutoAddPolicy())
+        ssh.connect(hostname=self.host, port=self.port, username=self.user, key_filename=self.id_file)
 
-    def upload_file(self, local_path: str, remote_path: str):
-        """Upload a file to the remote system."""
-        logging.info(f"Uploading file to {self.name}: {local_path} -> {remote_path}")
-        subprocess.run(["scp", "-i", self.id_file, local_path, f"{self.user}@{self.host}:{remote_path}"], check=True)
+        started_at = datetime.utcnow()
+        stdin, stdout, stderr = ssh.exec_command(command)
+        exit_code = stdout.channel.recv_exit_status()
+        ended_at = datetime.utcnow()
 
-    def download_file(self, remote_path: str, local_path: str):
-        """Download a file from the remote system."""
-        logging.info(f"Downloading file from {self.name}: {remote_path} -> {local_path}")
-        subprocess.run(["scp", "-i", self.id_file, f"{self.user}@{self.host}:{remote_path}", local_path], check=True)
+        result = CommandResult(
+            command=command,
+            exit_code=exit_code,
+            stdout=stdout.read().decode(),
+            stderr=stderr.read().decode(),
+            started_at=started_at,
+            ended_at=ended_at
+        )
+        ssh.close()
+
+        self._history.append(result)
+        return result
+
+    def run(self, command: str):
+        """Run an interactive command on the remote system."""
+        raise NotImplementedError("Interactive command execution is not yet implemented.")
+
 
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
@@ -135,12 +152,6 @@ class Connection:
     
             return base_cmd
 
-    def get_connection_state(self):
-        """Retrieve the current state of the connection."""
-        if self._process and self._process.poll() is None:
-            return "running"
-        elif self._stop_event.is_set():
-            return "stopped"
-        else:
-            return "not running"
-        return base_cmd
+    def get_state(self) -> ConnectionState:
+        """Return the current state of the connection."""
+        return self.state
