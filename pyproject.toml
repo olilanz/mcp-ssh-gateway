@@ -5,7 +5,7 @@ description = "MCP-compatible SSH Gateway agent"
 authors = [{name = "Oliver Lanz"}]
 license = "Apache-2.0"
 dependencies = [
-  "mcp-agent",
+  "mcp[cli]",
   "paramiko",
 ]
 

@@ -1,6 +1,4 @@
-import subprocess
-import threading
-import time
+# Removed unused imports
 import logging
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s')
@@ -16,6 +14,13 @@ class ConnectionState(Enum):
     CONNECTING = "connecting"
     BROKEN = "broken"
 
+def _resolve_target(self) -> tuple[str, int]:
+    """Resolve the target host and port based on the connection mode."""
+    if self.mode == ConnectionMode.TUNNEL:
+        return ("localhost", self.port)
+    return (self.host, self.port)
+
+
 class Connection:
     def __init__(self, connection_config):
         self.config = connection_config
@@ -28,118 +33,83 @@ class Connection:
         self.state = ConnectionState.CLOSED
         self.metadata = {"os_version": None, "architecture": None}
         self._history = []  # Track command execution history
-        self._stop_event = threading.Event()
-        self._process = None  # Initialize the process attribute
-        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._ssh = None  # Initialize the SSH client attribute
 
     def open(self):
-        """Open the connection and update its state."""
+        """Open the connection using Paramiko and update its state."""
+        from paramiko import SSHClient, AutoAddPolicy
+
         logging.info(f"🔌 Opening connection: {self.name}")
         self.state = ConnectionState.CONNECTING
-        self.start()
-        self.state = ConnectionState.OPEN
+
+        try:
+            self._ssh = SSHClient()
+            self._ssh.set_missing_host_key_policy(AutoAddPolicy())
+            self._ssh.connect(
+                hostname=self.host,
+                port=self.port,
+                username=self.user,
+                key_filename=self.id_file
+            )
+            self.state = ConnectionState.OPEN
+        except Exception as e:
+            logging.error(f"❌ Failed to open connection: {e}")
+            self.state = ConnectionState.BROKEN
+            raise RuntimeError("Failed to establish connection.") from e
 
     def close(self):
-        """Close the connection and update its state."""
+        """Close the Paramiko connection and update its state."""
         logging.info(f"🛑 Closing connection: {self.name}")
-        self.stop()
+        if hasattr(self, "_ssh") and self._ssh:
+            self._ssh.close()
         self.state = ConnectionState.CLOSED
 
     def execute(self, command: str) -> CommandResult:
-        """Execute a command on the remote system using paramiko."""
-        from paramiko import SSHClient, AutoAddPolicy
+        """Execute a command on the remote system using Paramiko."""
         from datetime import datetime
-        from agent.connection_result import CommandResult
+
+        if not self._ssh:
+            raise RuntimeError("Connection is not open. Cannot execute command.")
 
         logging.info(f"Executing command on {self.name}: {command}")
-        ssh = SSHClient()
-        ssh.set_missing_host_key_policy(AutoAddPolicy())
-        ssh.connect(hostname=self.host, port=self.port, username=self.user, key_filename=self.id_file)
+        from datetime import timezone
+        started_at = datetime.now(timezone.utc)
 
-        started_at = datetime.utcnow()
-        stdin, stdout, stderr = ssh.exec_command(command)
-        exit_code = stdout.channel.recv_exit_status()
-        ended_at = datetime.utcnow()
+        try:
+            stdin, stdout, stderr = self._ssh.exec_command(command)
+            exit_code = stdout.channel.recv_exit_status()
+            ended_at = datetime.now(timezone.utc)
 
-        result = CommandResult(
-            command=command,
-            exit_code=exit_code,
-            stdout=stdout.read().decode(),
-            stderr=stderr.read().decode(),
-            started_at=started_at,
-            ended_at=ended_at
-        )
-        ssh.close()
-
-        self._history.append(result)
-        return result
+            result = CommandResult(
+                command=command,
+                exit_code=exit_code,
+                stdout=stdout.read().decode(),
+                stderr=stderr.read().decode(),
+                started_at=started_at,
+                ended_at=ended_at
+            )
+            self._history.append(result)
+            return result
+        except Exception as e:
+            logging.error(f"❌ Command execution failed: {e}")
+            raise RuntimeError(f"Failed to execute command: {command}") from e
 
     def run(self, command: str):
         """Run an interactive command on the remote system."""
         raise NotImplementedError("Interactive command execution is not yet implemented.")
 
 
-        self._stop_event = threading.Event()
-        self._thread = threading.Thread(target=self._run_loop, daemon=True)
-        self._process = None  # Initialize the process attribute
+        # Removed threading and subprocess attributes
 
-    def start(self):
-        logging.info(f"🔌 Starting connection: {self.name}")
-        self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run_loop, daemon=True)
-        self._thread.start()
+    # Removed start() method
 
-    def stop(self):
-        logging.info(f"🛑 Stopping connection: {self.name}")
-        self._stop_event.set()
-        if self._process and self._process.poll() is None:
-            self._process.terminate()
-            try:
-                self._process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self._process.kill()
+    # Removed stop() method
 
-    def is_running(self):
-        return self._thread.is_alive()
+    # Removed is_running() method
 
-    def _run_loop(self):
-        while not self._stop_event.is_set():
-            cmd = self._build_ssh_command()
-            logging.info(f"▶️ Launching SSH for {self.name}: {' '.join(cmd)}")
+    # Removed _run_loop() method
 
-            try:
-                self._process = subprocess.Popen(cmd)
-                self._process.wait()
-                logging.warning(f"⚠️ SSH process for {self.name} exited with code {self._process.returncode}")
-            except Exception as e:
-                logging.error(f"❌ Failed to start SSH for {self.name}: {e}")
-
-            if not self._stop_event.is_set():
-                logging.info(f"⏳ Retrying {self.name} in 5 seconds...")
-                time.sleep(5)
-
-    def _build_ssh_command(self):
-        base_cmd = [
-            "ssh",
-            "-i", self.id_file if self.id_file else "/dev/null",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "ExitOnForwardFailure=yes",
-            "-N"  # No remote command execution
-        ]
-
-        # Ensure all elements in the command are strings
-        base_cmd = [str(item) for item in base_cmd]
-
-        if self.mode.value == "direct":
-            local_forward = f"{self.port}:localhost:22"
-            base_cmd += ["-L", local_forward, f"{self.user}@{self.host}", "-p", str(self.port)]
-        elif self.mode.value == "tunnel":
-            reverse_forward = f"{self.port}:localhost:22"
-            base_cmd += ["-R", reverse_forward, f"{self.user}@localhost"]
-        else:
-            raise ValueError(f"Unknown mode: {self.mode}")
-
-        return base_cmd
+    # Removed _build_ssh_command() method
 
         if self.mode == "direct":
             local_forward = f"{self.port}:localhost:22"
@@ -155,3 +125,12 @@ class Connection:
     def get_state(self) -> ConnectionState:
         """Return the current state of the connection."""
         return self.state
+    
+    def describe(self) -> dict:
+        """Describe the connection's metadata and history."""
+        return {
+            "name": self.name,
+            "state": self.state.value,
+            "metadata": self.metadata,
+            "history": [result.to_dict() for result in self._history],
+        }
