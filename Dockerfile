@@ -12,7 +12,7 @@ RUN apt-get update && \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir --break-system-packages mcp[cli] mcpo
+RUN pip install --no-cache-dir --break-system-packages mcp[cli] mcpo pytest
 
 # Configure SSH daemon during build
 RUN mkdir -p /etc/ssh && \

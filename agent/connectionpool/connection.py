@@ -27,6 +27,7 @@ class Connection:
         self.state = ConnectionState.CLOSED
         self.metadata = {"os_version": None, "architecture": None}
         self._stop_event = threading.Event()
+        self._process = None  # Initialize the process attribute
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
 
     def open(self):
@@ -103,11 +104,14 @@ class Connection:
     def _build_ssh_command(self):
         base_cmd = [
             "ssh",
-            "-i", self.id_file,
+            "-i", self.id_file if self.id_file else "/dev/null",
             "-o", "StrictHostKeyChecking=no",
             "-o", "ExitOnForwardFailure=yes",
             "-N"  # No remote command execution
         ]
+
+        # Ensure all elements in the command are strings
+        base_cmd = [str(item) for item in base_cmd]
 
         if self.mode.value == "direct":
             local_forward = f"{self.port}:localhost:22"

@@ -5,13 +5,32 @@ import subprocess
 from .connection import Connection
 
 class ConnectionPool:
-    def __init__(self, connection_configs):
+    def __init__(self, connection_configs, reconnection_delay=5, reconnection_attempts=0):
+        """
+        Initialize the connection pool.
+
+        :param connection_configs: List of connection configurations.
+        :param reconnection_delay: Delay in seconds between reconnection attempts (default: 5 seconds).
+        :param reconnection_attempts: Number of reconnection attempts (default: 0 for infinite attempts).
+        """
+        self.reconnection_delay = reconnection_delay
+        self.reconnection_attempts = reconnection_attempts
         self.runners = []
         self.os_info_cache = {}
         self.lock = threading.Lock()  # Ensure thread safety for os_info_cache
         self.connection_configs = connection_configs
+        class ConfigObject:
+            def __init__(self, config):
+                self.name = config["name"]
+                self.user = config["user"]
+                self.id_file = config["id_file"]
+                self.mode = config["mode"]
+                self.port = config["port"]
+                self.host = config["host"]
+
         for config in self.connection_configs:
-            runner = Connection(config)
+            config_obj = ConfigObject(config)
+            runner = Connection(config_obj)
             self.runners.append(runner)
 
     def gather_os_info(self, runner):
@@ -43,14 +62,16 @@ class ConnectionPool:
 
     def _monitor_connections(self):
         """Monitor connections and attempt reconnections on failure."""
-        while True:
+        attempts = 0
+        while self.reconnection_attempts == 0 or attempts < self.reconnection_attempts:
             with self.lock:
                 for runner in self.runners:
                     if not runner.is_running():
                         logging.warning(f"⚠️ Connection {runner.name} is down. Attempting to reconnect...")
                         runner.start()
                         self.gather_os_info(runner)
-            time.sleep(5)  # Retry interval
+            time.sleep(self.reconnection_delay)  # Retry interval
+            attempts += 1
 
     def stop_all(self):
         logging.info("🛑 Stopping all connections...")
