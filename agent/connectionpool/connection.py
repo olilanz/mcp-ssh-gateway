@@ -29,20 +29,27 @@ class OneShotRepeatingTimer:
         self._timer: Optional[threading.Timer] = None
         self._lock = threading.Lock()
         self._stopped = False
+        self._running = False
 
     def start(self):
         with self._lock:
-            if self._stopped:
+            if self._stopped or self._running:
                 return
+            self._running = True
             self._timer = threading.Timer(self.interval, self._run)
+            self._timer.daemon = True
             self._timer.start()
 
     def _run(self):
-        with self._lock:
-            if self._stopped:
-                return
-        self.callback()
-        self.start()  # Reschedule
+        try:
+            self.callback()
+        finally:
+            with self._lock:
+                self._running = False
+                if not self._stopped:
+                    self._timer = threading.Timer(self.interval, self._run)
+                    self._timer.daemon = True
+                    self._timer.start()
 
     def cancel(self):
         with self._lock:
@@ -67,7 +74,7 @@ class BaseConnection:
         self.state = ConnectionState.CLOSED
         self.metadata = {"os_version": None, "architecture": None}
         self._history: List[CommandResult] = []
-        self._ssh: Optional[SSHClient] = None
+        self._ssh = None
         self._health_timer: Optional[OneShotRepeatingTimer] = None
         self._lock = threading.Lock()
 
@@ -124,7 +131,7 @@ class BaseConnection:
             with self._lock:
                 if self._ssh:
                     transport = self._ssh.get_transport()
-                    if self._ssh and transport and not transport.is_active():
+                    if transport and not transport.is_active():
                         logging.warning(f"❌ Health check failed: {self.name} appears broken.")
                         self.state = ConnectionState.BROKEN
         self._health_timer = OneShotRepeatingTimer(10, check)
