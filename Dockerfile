@@ -16,19 +16,19 @@ RUN apt-get update && \
 RUN pip install --no-cache-dir --break-system-packages mcp[cli] mcpo pytest paramiko
 
 # Configure SSH daemon during build
-RUN mkdir -p /etc/ssh && \
-    echo "Port ${SSH_LISTEN_PORT}" > /etc/ssh/sshd_config && \
-    echo "PermitRootLogin prohibit-password" >> /etc/ssh/sshd_config && \
-    echo "PasswordAuthentication no" >> /etc/ssh/sshd_config && \
-    echo "PermitEmptyPasswords no" >> /etc/ssh/sshd_config && \
-    echo "ChallengeResponseAuthentication no" >> /etc/ssh/sshd_config && \
-    echo "UsePAM no" >> /etc/ssh/sshd_config && \
-    echo "PermitTTY no" >> /etc/ssh/sshd_config && \
-    echo "ForceCommand echo 'This connection is for tunneling only. No command execution available.'" >> /etc/ssh/sshd_config && \
-    echo "GatewayPorts yes" >> /etc/ssh/sshd_config && \
-    echo "AllowTcpForwarding yes" >> /etc/ssh/sshd_config && \
-    echo "PermitOpen any" >> /etc/ssh/sshd_config && \
-    echo "AuthorizedKeysFile /etc/ssh/authorized_keys" >> /etc/ssh/sshd_config
+#RUN mkdir -p /etc/ssh && \
+#    echo "Port ${SSH_LISTEN_PORT}" > /etc/ssh/sshd_config && \
+#    echo "PermitRootLogin prohibit-password" >> /etc/ssh/sshd_config && \
+#    echo "PasswordAuthentication no" >> /etc/ssh/sshd_config && \
+#    echo "PermitEmptyPasswords no" >> /etc/ssh/sshd_config && \
+#    echo "ChallengeResponseAuthentication no" >> /etc/ssh/sshd_config && \
+#    echo "UsePAM no" >> /etc/ssh/sshd_config && \
+#    echo "PermitTTY no" >> /etc/ssh/sshd_config && \
+#    echo "ForceCommand echo 'This connection is for tunneling only. No command execution available.'" >> /etc/ssh/sshd_config && \
+#    echo "GatewayPorts yes" >> /etc/ssh/sshd_config && \
+#    echo "AllowTcpForwarding yes" >> /etc/ssh/sshd_config && \
+#    echo "PermitOpen any" >> /etc/ssh/sshd_config && \
+#    echo "AuthorizedKeysFile /etc/ssh/authorized_keys" >> /etc/ssh/sshd_config
 
 # environment setup
 EXPOSE ${MCPO_PORT}
