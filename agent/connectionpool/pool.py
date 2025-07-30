@@ -6,20 +6,22 @@ from .connection import Connection
 from .connection import ConnectionState
 
 class ConnectionPool:
-    def __init__(self, connection_configs, reconnection_delay=5, reconnection_attempts=0):
+    def __init__(self, connection_configs, reconnection_delay=5):
         """
         Initialize the connection pool.
 
         :param connection_configs: List of connection configurations.
         :param reconnection_delay: Delay in seconds between reconnection attempts (default: 5 seconds).
-        :param reconnection_attempts: Number of reconnection attempts (default: 0 for infinite attempts).
         """
         self.reconnection_delay = reconnection_delay
-        self.reconnection_attempts = reconnection_attempts
         self.connections = []
         self.os_info_cache = {}
-        self.lock = threading.Lock()  # Ensure thread safety for os_info_cache
-        self.connection_configs = connection_configs
+        self.lock = threading.Lock()  # For thread-safe access to os_info_cache
+        self._monitor_lock = threading.Lock()  # To ensure one monitor loop at a time
+        self._stopping = threading.Event()  # To signal stop
+        self._timer = None
+        self._started = False
+
         class ConfigObject:
             def __init__(self, config):
                 self.name = config["name"]
@@ -29,14 +31,14 @@ class ConnectionPool:
                 self.port = config["port"]
                 self.host = config["host"]
 
-        for config in self.connection_configs:
+        for config in connection_configs:
             config_obj = ConfigObject(config)
             connection = Connection(config_obj)
             self.connections.append(connection)
 
     def gather_os_info(self, connection):
         """Gather OS info for a specific connection."""
-        with self.lock:  # Ensure thread-safe access to os_info_cache
+        with self.lock:
             try:
                 result = subprocess.run(
                     ["scripts/os_info.sh"],
@@ -52,41 +54,68 @@ class ConnectionPool:
                 logging.error(f"❌ Failed to gather OS info for {connection.name}: {e}", exc_info=True)
 
     def start(self):
-        logging.info("🚀 Starting the pool...")
+        if self._started:
+            logging.warning("⚠️ Connection pool already started.")
+            return
+        self._started = True
+        logging.info("🚀 Starting the connection pool...")
+
         for connection in self.connections:
             connection.open()
             self.gather_os_info(connection)
 
-        # Start a monitoring thread to handle reconnections
-        self._monitor_thread = threading.Thread(target=self._monitor_connections, daemon=True)
-        self._monitor_thread.start()
+        self._schedule_monitor()
 
-    def _monitor_connections(self):
-        """Monitor connections and attempt reconnections on failure."""
-        attempts = 0
-        while self.reconnection_attempts == 0 or attempts < self.reconnection_attempts:
-            with self.lock:
+    def _schedule_monitor(self):
+        if not self._stopping.is_set():
+            self._timer = threading.Timer(self.reconnection_delay, self._monitor_once)
+            self._timer.start()
+
+    def _monitor_once(self):
+        with self._monitor_lock:
+            if self._stopping.is_set():
+                return
+
+            if not self.connections:
+                logging.info("🔍 No connections in the pool.")
+            else:
+                closed_found = False
                 for connection in self.connections:
                     if connection.get_state() != ConnectionState.OPEN:
+                        closed_found = True
                         logging.warning(f"⚠️ Connection {connection.name} is down. Attempting to reconnect...")
                         connection.open()
                         self.gather_os_info(connection)
-            time.sleep(self.reconnection_delay)  # Retry interval
-            attempts += 1
+
+                if closed_found:
+                    logging.info("🔁 One or more connections were re-opened.")
+                else:
+                    logging.info("✅ All connections are currently open.")
+
+        self._schedule_monitor()
 
     def stop(self):
-        logging.info("🛑 Stopping the pool...")
+        if not self._started:
+            logging.warning("⚠️ Connection pool not started or already stopped.")
+            return
+
+        logging.info("🛑 Stopping the connection pool...")
+        self._stopping.set()
+
+        if self._timer:
+            self._timer.cancel()
+            self._timer = None
+
+        with self._monitor_lock:
+            pass  # Wait for any running monitor to complete
+
         for connection in self.connections:
             connection.close()
 
-        # Stop the monitoring thread
-        if hasattr(self, "_monitor_thread") and self._monitor_thread:
-            logging.info("🛑 Stopping connection monitor thread...")
-            self._monitor_thread = None
+        self._started = False
 
     def query_pool(self):
-        """Query the state of the connection pool."""
-        with self.lock:  # Ensure thread-safe access to os_info_cache
+        with self.lock:
             pool_state = []
             for connection in self.connections:
                 state = {
@@ -99,7 +128,6 @@ class ConnectionPool:
             return pool_state
 
     def send_command(self, connection_name, command):
-        """Send a command to a specific connection and retrieve the output."""
         with self.lock:
             for connection in self.connections:
                 if connection.name == connection_name:
@@ -112,5 +140,4 @@ class ConnectionPool:
             return None
 
     def expose_pool_state(self):
-        """Expose the connection pool state for external querying."""
         return self.query_pool()
