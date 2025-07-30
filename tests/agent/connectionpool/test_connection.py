@@ -1,53 +1,107 @@
-import sys
-from pathlib import Path
-
-# Add the workspace directory to the Python path
-sys.path.append(str(Path(__file__).resolve().parents[3]))
-
+import pytest
+import subprocess
+import time
+import socket
+import threading
 from agent.connectionpool.connection import Connection
 
-from unittest.mock import patch, MagicMock
 
-@patch("paramiko.SSHClient")
-def test_direct_connection(mock_ssh_client):
-    class MockConfig:
-        def __init__(self, name, user, id_file, mode, port, host):
-            self.name = name
-            self.user = user
-            self.id_file = id_file
-            self.mode = mode
-            self.port = port
-            self.host = host
+def test_direct_connection_success(spawn_sshd):
+    sshd = spawn_sshd
 
-    mock_ssh_instance = MagicMock()
-    mock_ssh_client.return_value = mock_ssh_instance
-    mock_ssh_instance.exec_command.return_value = (
-        None,
-        MagicMock(read=lambda: b"Hello, World!", channel=MagicMock(recv_exit_status=lambda: 0)),
-        MagicMock(read=lambda: b"")
-    )
-
-    config = MockConfig(
-        name="test_connection",
-        user="testuser",
-        id_file=None,
+    conn = Connection(
+        name="test-direct",
         mode="direct",
-        port=22,
-        host="localhost",
+        user=sshd.user,
+        host="127.0.0.1",
+        port=sshd.port,
+        id_file=sshd.agent_id_file,
     )
 
-    conn = Connection(config)
-    conn.open()
-    assert conn.get_state().name == "OPEN"
+    result = conn.execute("echo hello")
 
-    result = conn.execute("echo 'Hello, World!'")
-    assert result.command == "echo 'Hello, World!'"
-    assert result.succeeded()
-    assert "Hello, World!" in result.stdout
+    assert result.exit_code == 0
+    assert result.stdout.strip() == "hello"
+    assert result.stderr.strip() == ""
 
-    conn.close()
-    assert conn.get_state().name == "CLOSED"
 
-    metadata = conn.describe()
-    assert metadata["state"] == "closed"
-    assert any("Hello, World!" in entry["stdout"] for entry in metadata["history"])
+def test_direct_connection_key_mismatch(spawn_sshd, tmp_path):
+    sshd = spawn_sshd
+
+    # Generate a new identity key not in authorized_keys
+    wrong_key = tmp_path / "wrong_id_rsa"
+    subprocess.run(["ssh-keygen", "-t", "rsa", "-f", str(wrong_key), "-N", ""], check=True)
+
+    conn = Connection(
+        name="test-wrong-key",
+        mode="direct",
+        user=sshd.user,
+        host="127.0.0.1",
+        port=sshd.port,
+        id_file=str(wrong_key),
+    )
+
+    result = conn.execute("echo unreachable")
+
+    assert result.exit_code != 0
+    assert "Permission denied" in result.stderr or "Authentication failed" in result.stderr
+
+
+def test_tunnel_connection_success(spawn_sshd, tmp_path):
+    sshd = spawn_sshd
+
+    def find_free_port():
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
+
+    # Start the agent-side tunnel listener (via the Connection class)
+    listener_port = find_free_port()
+
+    def run_tunnel_listener():
+        Connection(
+            name="listener",
+            mode="tunnel",
+            user="dummy",
+            host="127.0.0.1",
+            port=listener_port,
+            id_file=sshd.agent_id_file,
+        ).run()
+
+    listener_thread = threading.Thread(target=run_tunnel_listener, daemon=True)
+    listener_thread.start()
+
+    time.sleep(0.5)  # give server time to start
+
+    tunnel_port = find_free_port()
+
+    # Simulate edge device initiating reverse tunnel
+    tunnel_proc = subprocess.Popen([
+        "ssh",
+        "-N",
+        "-o", "ExitOnForwardFailure=yes",
+        "-i", sshd.agent_id_file,
+        "-R", f"{tunnel_port}:localhost:{sshd.port}",
+        "127.0.0.1",
+        "-p", str(listener_port)
+    ])
+
+    time.sleep(1.0)  # wait for tunnel to be active
+
+    conn = Connection(
+        name="test-tunnel",
+        mode="tunnel",
+        user=sshd.user,
+        host="127.0.0.1",
+        port=tunnel_port,
+        id_file=sshd.agent_id_file,
+    )
+
+    result = conn.execute("echo tunnel")
+
+    tunnel_proc.terminate()
+    tunnel_proc.wait()
+
+    assert result.exit_code == 0
+    assert result.stdout.strip() == "tunnel"
+    assert result.stderr.strip() == ""

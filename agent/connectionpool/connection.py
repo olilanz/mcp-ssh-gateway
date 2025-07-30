@@ -214,8 +214,25 @@ class TunnelConnection(BaseConnection):
 class Connection:
     """
     Connection wrapper used by the pool. Chooses the correct implementation.
+    Supports both config object and keyword-based initialization.
     """
-    def __init__(self, config):
+    def __init__(self, *args, **kwargs):
+        if len(args) == 1 and not kwargs:
+            # Assume config-style: Connection(config)
+            config = args[0]
+        else:
+            # Build config-style object from kwargs
+            class Config:
+                def __init__(self, name, mode, user, host, port, id_file):
+                    self.name = name
+                    self.mode = mode
+                    self.user = user
+                    self.host = host
+                    self.port = port
+                    self.id_file = id_file
+
+            config = Config(**kwargs)
+
         mode = ConnectionMode(config.mode)
         self.impl = DirectConnection(config) if mode == ConnectionMode.DIRECT else TunnelConnection(config)
 
