@@ -24,8 +24,9 @@ class ConnectionConfig:
 
 def load_connections(path: str) -> list[dict]:
     """Load connection configurations from a file."""
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"❌ Config file not found: {path}")
+    if not path or not os.path.exists(path):
+        logging.warning("No valid config file provided. Returning an empty connection list.")
+        return []
 
     with open(path, "r") as f:
         try:
