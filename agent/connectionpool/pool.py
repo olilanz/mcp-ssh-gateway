@@ -51,8 +51,8 @@ class ConnectionPool:
             except subprocess.CalledProcessError as e:
                 logging.error(f"❌ Failed to gather OS info for {connection.name}: {e}", exc_info=True)
 
-    def start_all(self):
-        logging.info("🚀 Starting all connections...")
+    def start(self):
+        logging.info("🚀 Starting the pool...")
         for connection in self.connections:
             connection.open()
             self.gather_os_info(connection)
@@ -74,8 +74,8 @@ class ConnectionPool:
             time.sleep(self.reconnection_delay)  # Retry interval
             attempts += 1
 
-    def stop_all(self):
-        logging.info("🛑 Stopping all connections...")
+    def stop(self):
+        logging.info("🛑 Stopping the pool...")
         for connection in self.connections:
             connection.close()
 

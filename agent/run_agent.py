@@ -21,7 +21,7 @@ def run_agent(config_path="connections.json"):
 
     # Create and start the ConnectionPool
     pool = ConnectionPool(connections)
-    pool.start_all()
+    pool.start()
 
     # Query the connection pool state and log it
     pool_state = pool.query_pool()
@@ -30,7 +30,7 @@ def run_agent(config_path="connections.json"):
     # Handle shutdown signals
     def shutdown_handler(sig, frame):
         logging.info("\n🔻 Received shutdown signal. Cleaning up...")
-        pool.stop_all()
+        pool.stop()
         sys.exit(0)
 
     signal.signal(signal.SIGINT, shutdown_handler)
@@ -40,10 +40,5 @@ def run_agent(config_path="connections.json"):
     mcp = FastMCP(name="mcp-ssh-gateway")
     mcp_handlers.register_tools(mcp)
 
-    logging.info("Agent registered all handlers. Starting MCP loop.")
-    mcp.run()
-
-    # Keep the connection pool running
-    logging.info("🔄 Connection pool is running. Press Ctrl+C to stop.")
-    while True:
-        time.sleep(1)
+    logging.info("Agent registered all handlers. MCP loop initiated.")
+    mcp.run(transport="stdio")
