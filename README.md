@@ -1,140 +1,162 @@
 # mcp-ssh-gateway
 
-> A minimal, secure, reverse SSH control plane for enabling LLM-powered system interaction.
+**mcp-ssh-gateway** is a minimal, secure, and composable SSH-based edge management agent. It provides a controlled interface for AI agents or automated systems to interact with remote edge devices using SSH, following a declarative, audit-friendly model.
 
-`mcp-ssh-gateway` lets trusted large language models (LLMs) see and interact with live OS instances — not through copy-paste shell commands, but through a structured, auditable protocol. It enables inspection, exploration, and lightweight automation, all while keeping human oversight and secure defaults at the core.
-
----
-
-## 🌱 From Idea to Capability
-
-This project began as a personal experiment: what if an LLM could help me configure a better AI server?
-
-That seed grew into something more — a reflection on how AI assistants could become truly helpful if they could not only *suggest* changes, but also *implement* them.
-
-From that came `mcp-ssh-gateway`, a minimal reverse SSH agent that connects edge systems securely and allows the LLM to reason about their state and act with precision. Over time, it became clear that this agent wasn’t just about server config — it was the **missing link** between AI cognition and system execution.
-
-The result: a way for LLMs to not just think, but *do*.
+The gateway runs as a self-contained Docker container, exposing an MCP interface (via `FastMCP`) over STDIO. It manages SSH-based connections to edge systems using static configuration, with support for both direct and reverse-tunnel-based modes.
 
 ---
 
-## 🧠 Purpose
+## 🗺️ Why This Exists
 
-`mcp-ssh-gateway` bridges the gap between AI assistants and real-world systems. It lets a trusted LLM securely:
+As AI systems grow increasingly capable, they face a gap: they can reason about the world, but they can't act on it safely. `mcp-ssh-gateway` is a tool designed to bridge that gap — giving reasoning systems a narrow, trusted interface to reach into real environments.
 
-- Inspect a live system
-- Suggest or execute commands
-- Transfer and read files
-- Run structured workflows
-- Learn, explore, or audit with context
+This project isn't about automation for its own sake. It's about composability and control. It empowers agents — human or machine — to execute operations through clearly defined, auditable, and intention-driven actions. It favors simplicity, security, and introspection over magic and fragility.
 
-The agent is task-agnostic. The prompts define the job.  
-The LLM is the brain — this is the hand.
+This is the agent's arm. It's the tool that allows an AI to run diagnostics, apply patches, gather telemetry, or reconfigure a device — without exposing a full shell, and without relying on scripts with hidden assumptions.
 
 ---
 
-## 🦾 Hero Use Case: AI Explorers
+## 🔍 Project Goals
 
-The real magic begins when you let a trusted LLM explore a live OS instance:
-
-- It checks installed software
-- Reads logs
-- Lists services
-- Proposes changes
-- Applies them — or asks for permission
-
-You’re no longer copy-pasting shell commands into a terminal. The LLM has a direct, secure link to the system via MCP. It can run commands, exchange files, and iterate on your instructions.
-
-Your creativity becomes its fuel — through prompts.
+* **Simplicity and clarity** over generality or hidden magic
+* **Static configuration only** — no dynamic shell execution, scripts, or handshakes
+* **Secure by default** — mutual SSH key authentication; no password or interactive login
+* **LLM-first** — enables intelligent agents to act, without dictating behavior
+* **Separation of concerns** — the agent does not control the tunnel setup, only reacts to it
 
 ---
 
-## 🎯 Why Task-Agnostic?
+## 📆 How It Works
 
-If your task was simple, repeatable, and uniform — you'd just write a shell script.
+### Direct Mode (`mode: "direct"`)
 
-But in today’s reality, you’re working with:
+In this mode, the agent initiates an outbound SSH connection to the target using its private key.
 
-- Unknown cloud instances
-- Mixed Linux distros
-- Legacy systems with surprises
-- One-off fixes, audits, or experiments
+* The target must be directly reachable (e.g. via VPN or static IP).
+* The connection is declared in `connections.json`.
+* The agent uses Paramiko to establish the connection and execute commands.
 
-LLMs are the perfect partner for this kind of **heterogenous, stateful, live debugging** — if only they could *reach in*.  
-`mcp-ssh-gateway` lets them do exactly that.
-
----
-
-## 🧰 Use Cases
-
-This is not a narrow tool. It’s an execution layer for AI creativity. Some use cases:
-
-- 🧠 **AI-powered Code Reviews**  
-  Attach to a local repo. Let the LLM read, critique, and propose changes — or implement them.
-
-- 🔐 **Infrastructure Hardening**  
-  Run remote scans via Kali Linux. Enumerate ports, detect CVEs, apply hardening steps — securely and repeatably.
-
-- 🛠 **OS Maintenance**  
-  Update packages, clean bloatware, enable or disable services, adjust configs — all from an LLM prompt.
-
-- 💻 **Edge Device Management**  
-  Manage scattered edge devices through one central, reverse-connected control agent — no open ports required.
+```
+Agent → SSH → Target (sshd)
+```
 
 ---
 
-## 👤 Who Is This For?
+### Tunnel Mode (`mode: "tunnel"`)
 
-`mcp-ssh-gateway` is for:
+In this mode, the edge device initiates a reverse tunnel **into the agent**, exposing its own `sshd` back to the agent through a loopback port.
 
-- 🔐 Security professionals running live reconnaissance
-- 🧑‍💻 Power users automating their homelabs
-- ⚙️ DevOps engineers exploring hybrid stacks
-- 🧠 AI tinkerers experimenting with live LLM feedback loops
+* The agent starts a local SSH server using Paramiko.
+* The edge connects to this server using `ssh -R`, opening a reverse tunnel (e.g. `-R 22222:localhost:22`).
+* The agent detects the tunnel and connects to `127.0.0.1:22222` as if it were a local host.
 
-If you know your systems and want to bring LLMs into the loop — this project is for you.
+```
+Edge: ssh -R 22222:localhost:22 agent_user@agent_host
 
----
+Agent: connects to 127.0.0.1:22222 → tunnel → Edge (sshd)
+```
 
-## ✨ When It Clicks
-
-The magic happens when the LLM stops being a chatbot — and starts behaving like a **live assistant** with **eyes on your systems**.
-
-Whether you're:
-
-- Reconfiguring a server and want step-by-step feedback
-- Exploring unknown systems and need insights fast
-- Scanning for vulnerabilities and confirming findings
-- Running live experiments to see what works and what breaks
-
-`mcp-ssh-gateway` lets the AI reach in, observe, act — and iterate.
+The tunnel must be initiated from the edge. The agent does not control or initiate the reverse tunnel.
 
 ---
 
-## ⚠️ Security First
+## 🛠 Configuration
 
-This project is **secure by default**:
+All connections are statically defined in a `connections.json` file. Example:
 
-- Reverse-only tunnel: no open edge ports
-- No agent-side command execution
-- Mutual SSH key authentication
-- Human-controlled provisioning
+```json
+[
+  {
+    "name": "edge-vm-1",
+    "mode": "direct",
+    "user": "admin",
+    "host": "192.168.1.100",
+    "port": 22,
+    "id_file": "/data/keys/edge-vm-1.key"
+  },
+  {
+    "name": "edge-vm-2",
+    "mode": "tunnel",
+    "user": "pi",
+    "host": "127.0.0.1",
+    "port": 22222,
+    "id_file": "/data/keys/edge-vm-2.key"
+  }
+]
+```
 
-> 🔒 With great power comes great responsibility.  
-> This project makes your systems programmable by AI. Use with care, audit behavior, and apply scoped credentials.
+* `mode`: "direct" for outbound SSH; "tunnel" for reverse-tunnel probing
+* `host`: target hostname or loopback address (`127.0.0.1` in tunnel mode)
+* `port`: target SSH port; typically 22 in direct mode or reverse-exposed port in tunnel mode
+* `id_file`: private key used to authenticate to the target
 
 ---
 
-## 📄 License
+## 💡 Intended Use Cases
 
-Licensed under the [Apache License, Version 2.0](LICENSE).
+This project is meant to be used in scenarios like:
+
+* Infrastructure inspection and system discovery
+* Ad-hoc debugging and remote diagnostics
+* Secure reconfiguration of edge devices
+* AI-assisted patching or updates
+* Agent-driven decision-making under human oversight
+* Bootstrapping new devices into managed environments
+
+It works best when paired with an orchestration layer, task planner, or control loop that treats system state as observable and controllable.
 
 ---
 
-## 🙋 Author Note
+## 💪 Test and Development
 
-This project is a tool — but it’s also more to me.
+* `direct` mode is tested against a locally spawned `sshd` process
+* `tunnel` mode is tested by simulating an edge device that:
 
-A brain without arms is limited.  
-I see `mcp-ssh-gateway` as a necessary enabler: it lets LLMs *do*, not just *comment*.  
-With a secure link to the system, they can finally become practically useful — and not just opinionated bystanders.
+  1. Runs its own `sshd`
+  2. Initiates a reverse tunnel into the agent using `ssh -R`
+  3. Allows the agent to connect to it via loopback port (e.g. `127.0.0.1:22222`)
+
+Test utilities are being added to automate this using pytest fixtures.
+
+---
+
+## 🛡️ Security Model
+
+* All SSH interactions use mutual key-based authentication
+* The agent never exposes an interactive shell or login
+* Tunnel sessions are strictly for port forwarding (no command execution)
+* Audit logs are emitted for all connection events and command executions
+
+---
+
+## 🚀 Roadmap Highlights
+
+* Add command result streaming and structured output
+* Add file transfer (SFTP) support via Paramiko
+* Add dynamic edge onboarding via metadata handshake
+* Add per-connection retry limits and failure tracking
+
+---
+
+## 🚜 Who Should Use This?
+
+This project is for AI agent developers, edge automation engineers, or system integrators who want to give reasoning agents controlled access to real-world systems.
+
+It's ideal when you:
+
+* Need auditable and safe remote access
+* Don't want full SSH shells
+* Prefer static configuration and trust-first design
+* Want to build secure AI-ops automation pipelines
+
+---
+
+## ⚒️ License
+
+Licensed under the Apache 2.0 license.
+
+---
+
+## 😎 Contributions Welcome
+
+See `CONTRIBUTING.md` for guidelines on how to file issues, suggest features, or submit PRs.

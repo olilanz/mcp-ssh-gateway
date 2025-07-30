@@ -1,80 +1,78 @@
 # Connecting an Edge Device
 
-This guide explains how to connect an edge device to the `mcp-ssh-gateway` agent using reverse SSH.
+Depending on your infrastructure and use case, you may choose between two connection modes:
 
-## 🧭 Overview
+## ✅ Direct Mode ("direct")
 
-The edge device initiates a reverse SSH tunnel to the gateway agent. Once the connection is live, the agent can inspect, interact with, and run commands on the edge — securely and under LLM control via MCP.
+Direct mode is the simplest option and works well in **trusted infrastructure**, where:
 
-## 🔐 Prerequisites
+* The agent can reach the edge directly over the network
+* The edge is on a VPN, local subnet, or has a fixed IP address
 
-- Edge device must have:
-  - SSH client installed (`openssh-client`)
-  - The agent's **public key**
-- Agent must have:
-  - SSH server (`sshd`) running
-  - The edge device's **public key** registered
+In this setup, the agent connects *to* the edge using SSH. The edge runs `sshd` and listens on a known IP and port.
 
----
+**Recommended for:**
 
-## 🗝️ Key Exchange
+* Internal or development networks
+* When you control the edge environment and trust the network
 
-### 1. On the Edge Device
+No special configuration is needed on the edge, except:
 
-Generate SSH key pair if not already present:
+* Ensure `sshd` is running
+* Add the agent’s public key to `~/.ssh/authorized_keys`
 
-```bash
-ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""
-```
+## 🔁 Tunnel Mode ("tunnel")
 
-Send the **public key** (`~/.ssh/id_ed25519.pub`) to the agent administrator.
+Tunnel mode is intended for **locked-down infrastructure**, where the edge is **not reachable from the agent**, but the agent is reachable from the edge.
 
-### 2. On the Agent
+This is common in real-world edge scenarios:
 
-Place the received public key into `~/.ssh/authorized_keys` for the user handling edge logins (usually a restricted user like `edgebot`).
+* Headless devices behind NAT or firewalls
+* Mobile or intermittent connectivity
+* Secure environments with outbound-only traffic
 
----
+### How It Works
 
-## 🔄 Establish Reverse SSH
-
-On the edge device:
+The agent starts an embedded SSH server using `paramiko`. The edge device connects to this SSH server and opens a reverse tunnel like so:
 
 ```bash
-ssh -N -R <remote-port>:localhost:22 edgebot@<agent-address> -i ~/.ssh/id_ed25519
+ssh -i edge.key \
+    -R 22222:localhost:22 \
+    agent_user@agent_host -p <agent_tunnel_port>
 ```
 
-- Replace `<remote-port>` with a preferred port (within an agreed range)
-- Replace `<agent-address>` with the public IP or DNS of the agent
-- You can use `autossh` for automatic reconnections
+This exposes the edge's own `sshd` (on port 22) back through the tunnel. Once connected, the agent will:
 
-Once connected, the agent will detect the tunnel and expose the system to the MCP layer.
+* Detect the active tunnel
+* Connect to `127.0.0.1:22222`
+* Authenticate using its key
 
----
+**Recommended for:**
 
-## ✅ Verification
+* Headless, mobile, or firewalled edge devices
+* Environments where outbound tunnels are easier than inbound access
 
-1. The agent logs the new connection
-2. The device is now accessible through the MCP API
-3. OpenWebUI or another client can request:
-   - OS information
-   - Installed tools
-   - Available capabilities
-   - Health status
+### Required on the Edge
 
----
+* `sshd` must be running
+* An identity key must be available to connect to the agent
+* A startup script or systemd service can be used to maintain the reverse tunnel
 
-## 🧰 Tips
+Example (simplified):
 
-- Use systemd or cron to reconnect on boot
-- Prefer low, unused port ranges for tunneling (e.g. 22220–22250)
-- Use a non-root user for added safety
-- Monitor agent logs for accepted connections
+```bash
+ssh -N \
+    -o ExitOnForwardFailure=yes \
+    -i /etc/ssh/edge.key \
+    -R 22222:localhost:22 \
+    agent@agent.example.com -p 2222
+```
 
----
+This command can be made persistent with `autossh`, a shell loop, or systemd.
 
-## 🛡 Security Reminder
+## 🔐 Mutual Trust
 
-- The edge device **cannot** execute commands on the agent
-- The agent will only act **after** secure connection and validation
-- Use firewalls to restrict outbound access if necessary
+Both sides must trust each other:
 
+* The edge must know the agent’s public key to allow the reverse tunnel
+* The agent must know the edge’s public key to connect back through the tunnel
