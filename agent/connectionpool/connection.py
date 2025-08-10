@@ -74,7 +74,7 @@ class BaseConnection:
         self.state = ConnectionState.CLOSED
         self.metadata = {"os_version": None, "architecture": None}
         self._history: List[CommandResult] = []
-        self._ssh = None
+        self._ssh: Optional[SSHClient] = None
         self._health_timer: Optional[OneShotRepeatingTimer] = None
         self._lock = threading.Lock()
 
@@ -164,6 +164,11 @@ class DirectConnection(BaseConnection):
 
 
 class TunnelConnection(BaseConnection):
+    def run(self):
+        import time
+        logging.info(f"Starting tunnel connection: {self.name}")
+        while True:
+            time.sleep(1)
     """
     Reverse connection using a local tunnel port.
     Periodically probes until tunnel becomes active.
