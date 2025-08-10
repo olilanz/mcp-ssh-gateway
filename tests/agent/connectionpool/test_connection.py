@@ -18,6 +18,7 @@ def test_direct_connection_success(spawn_sshd):
         id_file=sshd.agent_id_file,
     )
 
+    conn.open()
     result = conn.execute("echo hello")
 
     assert result.exit_code == 0
@@ -41,6 +42,7 @@ def test_direct_connection_key_mismatch(spawn_sshd, tmp_path):
         id_file=str(wrong_key),
     )
 
+    conn.open()
     result = conn.execute("echo unreachable")
 
     assert result.exit_code != 0
@@ -97,6 +99,7 @@ def test_tunnel_connection_success(spawn_sshd, tmp_path):
         id_file=sshd.agent_id_file,
     )
 
+    conn.open()
     result = conn.execute("echo tunnel")
 
     tunnel_proc.terminate()

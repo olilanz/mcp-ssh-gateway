@@ -13,7 +13,17 @@ def sshd_fixture():
 
     # Write minimal sshd configuration
     with open(sshd_config, "w") as f:
-        f.write("Port 8023\n")  # Bind to a specific high port for testing
+        import socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            free_port = s.getsockname()[1]
+        f.write(f"Port {free_port}\n")  # Dynamically bind to a free port
+        f.write("HostKey {}/rsa_host_key\n".format(temp_dir.name))
+        f.write("HostKeyAlgorithms +ssh-rsa\n")
+        f.write("PubkeyAcceptedAlgorithms +ssh-rsa\n")
+        f.write("DisableDSA yes\n")
+        f.write("HostKeyAlgorithms +ssh-rsa\n")
+        f.write("PubkeyAcceptedAlgorithms +ssh-rsa\n")
         f.write("PidFile {}/sshd.pid\n".format(temp_dir.name))
         f.write("ListenAddress 127.0.0.1\n")
         f.write("PermitRootLogin no\n")
@@ -22,6 +32,7 @@ def sshd_fixture():
         f.write("UsePAM no\n")
 
     # Ensure /run/sshd directory exists
+    subprocess.run(["ssh-keygen", "-t", "rsa", "-f", "{}/rsa_host_key".format(temp_dir.name), "-N", ""], check=True)
     subprocess.run(["mkdir", "-p", "/run/sshd"], check=True)
 
     # Start sshd as a subprocess
@@ -37,22 +48,23 @@ def sshd_fixture():
     with open("{}/sshd.log".format(temp_dir.name), "r") as log_file:
         log_content = log_file.read()
         print(f"SSHD Log Content: {log_content}")
-    stderr_output = sshd_process.stderr.read() if sshd_process.stderr else ""
-    if stderr_output:
-        if "permission denied" in stderr_output.lower():
-            raise PermissionError(f"SSHD failed to start due to permission issues: {stderr_output}")
-        raise RuntimeError(f"SSHD failed to start: {stderr_output}")
-    stderr_output = sshd_process.stderr.read()
-    print(f"SSHD Error Output: {stderr_output}")
     with open("{}/sshd.pid".format(temp_dir.name)) as pid_file:
         pid = int(pid_file.read().strip())
-    port = subprocess.check_output(["lsof", "-Pan", "-p", str(pid), "-i", "-n"], text=True)
-    port = int([line.split(":")[-1].split("->")[0] for line in port.splitlines() if "LISTEN" in line][0])
+    port = free_port  # Use the dynamically allocated port directly
 
-    yield {
-        "host": "127.0.0.1",
-        "port": port,
-    }
+    class SSHD:
+        def __init__(self, host, port, user, agent_id_file):
+            self.host = host
+            self.port = port
+            self.user = user
+            self.agent_id_file = agent_id_file
+
+    yield SSHD(
+        host="127.0.0.1",
+        port=port,
+        user="test-user",
+        agent_id_file="/tmp/test-agent-id-file"
+    )
 
     # Cleanup
     sshd_process.terminate()
