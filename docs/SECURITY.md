@@ -1,46 +1,123 @@
-# Security Policy
+# Security Model
 
-## 📢 Reporting a Vulnerability
+This document explains the trust boundary and operational security model of `mcp-ssh-gateway`.
 
-If you discover a security vulnerability in `mcp-ssh-gateway`, please **do not open a public issue**.
+The gateway exists as a boundary agent between orchestration systems and real operational environments.
 
-Instead, contact the project maintainer **privately** to allow for responsible disclosure and a coordinated fix.
+## Core Security Principle
 
-Email: [security@yourdomain.example]
+The orchestrator receives capability, not custody.
 
----
+The gateway exposes operational capabilities through MCP tools while retaining ownership of:
 
-## 🔒 Supported Versions
+- SSH identities,
+- transport mechanics,
+- connection configuration,
+- capability discovery,
+- execution logging,
+- and operational context.
 
-| Version | Supported |
-|---------|-----------|
-| 0.x     | ✅ Yes     |
+External orchestrators and LLM systems should not directly manage:
 
-We aim to patch critical security issues in the latest major version. Older versions may not receive security updates.
+- passwords,
+- private keys,
+- target topology,
+- or unrestricted network authority.
 
----
+## Trust Boundary
 
-## ✅ Security by Design
+Configured connections define the reachable operational world.
 
-`mcp-ssh-gateway` is designed with the following principles:
+The LLM may reason about tasks and request actions through MCP tools, but operational reach remains constrained to explicitly configured and trusted environments.
 
-- Direct SSH and tunnel-probing support with key-based auth
-- No command execution allowed on the agent
-- Strict key-based authentication
-- Audit-friendly: deterministic, observable behavior
-- Tunnel listener/server behavior is not implemented in current code
+The gateway is intended to support:
 
----
+- systems automation,
+- remote administration,
+- diagnostics,
+- troubleshooting,
+- penetration testing,
+- offensive security research,
+- and operational workflows.
 
-## 🛡 Security Best Practices
+This means the gateway intentionally enables powerful actions in controlled environments.
 
-To further protect your deployment:
+Operational attribution and observability therefore matter.
 
-- Run in isolated Docker containers or sandboxed environments
-- Rotate SSH keys periodically
-- Monitor outbound connections from edge devices
-- Limit LLM instructions to audited prompts
+## Logging and Attribution
 
----
+Operations executed through the gateway should remain attributable.
 
-Thank you for contributing to a safer open-source ecosystem!
+Execution history and logs are intended to support:
+
+- diagnostics,
+- troubleshooting,
+- operational review,
+- auditing,
+- and post-mortem analysis.
+
+The architecture should preserve visibility into:
+
+- executed commands,
+- scripts,
+- transfers,
+- discovery actions,
+- and workflow activity.
+
+## Passwordless Connectivity
+
+The project prefers:
+
+- SSH identities,
+- passwordless authentication,
+- and explicit trust establishment.
+
+Long-term password storage should be avoided whenever possible.
+
+The gateway may eventually assist onboarding workflows that:
+
+- establish trust,
+- distribute identities,
+- configure passwordless access,
+- or register new connections.
+
+New environments must still become explicit configured connections before they are part of the reachable operational set.
+
+## Reverse Tunnel Security
+
+Reverse tunnel mode is intended for environments where the gateway cannot directly reach the remote machine.
+
+The remote environment initiates connectivity toward the gateway and exposes its local SSH service through a reverse tunnel.
+
+This model is useful for:
+
+- NATed environments,
+- outbound-only infrastructure,
+- headless devices,
+- remote labs,
+- and restricted infrastructure.
+
+The current implementation supports probing and connecting through already exposed local tunnel ports.
+
+The current code does not yet implement a full agent-side reverse tunnel SSH listener lifecycle.
+
+Documentation and tests must not claim reverse tunnel listener behavior until it exists in code.
+
+## Security Philosophy
+
+The project should remain:
+
+- explicit,
+- inspectable,
+- attributable,
+- and operationally grounded.
+
+Security should come from:
+
+- explicit trust,
+- constrained reachability,
+- SSH identity ownership,
+- observability,
+- and narrow operational boundaries.
+
+The project must avoid hidden authority expansion or implicit network trust.
