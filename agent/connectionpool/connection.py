@@ -1,3 +1,11 @@
+"""Connection lifecycle primitives for direct and reverse-tunnel reachability.
+
+Local boundary notes:
+- `Connection` is the public facade used by pool logic and tests.
+- Tunnel mode in this module is probe/connect-through-local-port behavior.
+- A full agent-side reverse tunnel listener lifecycle is not implemented here.
+"""
+
 import logging
 import threading
 import time
@@ -164,6 +172,12 @@ class DirectConnection(BaseConnection):
 
 
 class TunnelConnection(BaseConnection):
+    """Connection implementation for reverse tunnel mode.
+
+    Current behavior assumes an already-exposed local tunnel port and probes that
+    port until it is reachable, then opens Paramiko against `127.0.0.1:<port>`.
+    """
+
     def run(self):
         import time
         logging.info(f"Starting tunnel connection: {self.name}")
@@ -220,6 +234,9 @@ class Connection:
     """
     Connection wrapper used by the pool. Chooses the correct implementation.
     Supports both config object and keyword-based initialization.
+
+    This facade is the stable boundary for callers while direct/tunnel internals
+    evolve independently.
     """
     def __init__(self, *args, **kwargs):
         if len(args) == 1 and not kwargs:

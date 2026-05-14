@@ -6,6 +6,8 @@ The gateway gives an LLM operational reach into remote environments. Those envir
 
 The connection model determines how the gateway reaches those environments.
 
+The gateway agent should run in a protected control environment. Edge machines are remote capability environments reached through configured connections.
+
 ## Direct Mode
 
 Direct mode is used when the remote environment is reachable from the gateway.
@@ -47,6 +49,8 @@ This is common for:
 - intermittent environments,
 - remote labs,
 - or restricted infrastructure.
+
+Headless devices should generally prefer reverse tunnel mode.
 
 In this model:
 

@@ -91,6 +91,7 @@ The project is in an early implementation phase.
 Implemented:
 
 - MCP startup and tool registration foundations
+- baseline MCP tools for status/device info, command execution, and file upload
 - static connection configuration
 - connection pool lifecycle scaffolding
 - direct SSH connectivity using Paramiko
@@ -121,6 +122,14 @@ python -m pip install --upgrade pip
 python -m pip install -e .
 python -m pip install pytest
 pytest
+```
+
+## Run
+
+The current startup path expects a valid connection configuration file.
+
+```bash
+python app.py --connection-config ./connections.json
 ```
 
 ## Documentation

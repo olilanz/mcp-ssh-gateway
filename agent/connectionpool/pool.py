@@ -1,3 +1,12 @@
+"""Connection pool lifecycle orchestration around the `Connection` facade.
+
+Local boundary notes:
+- This module coordinates open/reconnect/close loops and lightweight OS metadata
+  refresh for each configured connection.
+- Callers should treat `Connection` as the public integration surface; pool logic
+  does not expose transport-specific internals.
+"""
+
 import logging
 import threading
 import time
@@ -12,6 +21,8 @@ class ConnectionPool:
 
         :param connection_configs: List of connection configurations.
         :param reconnection_delay: Delay in seconds between reconnection attempts (default: 5 seconds).
+
+        Current assumption: configs are static for process lifetime.
         """
         self.reconnection_delay = reconnection_delay
         self.connections = []
