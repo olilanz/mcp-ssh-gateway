@@ -8,6 +8,8 @@ ENV MCPO_PORT=8000
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     openssh-server \
+    curl \
+    iproute2 \
     libffi-dev libssl-dev \
     python3-pip \
     git \

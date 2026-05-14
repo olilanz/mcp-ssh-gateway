@@ -33,18 +33,13 @@ class ConnectionPool:
         self._timer = None
         self._started = False
 
-        class ConfigObject:
-            def __init__(self, config):
-                self.name = config["name"]
-                self.user = config["user"]
-                self.id_file = config["id_file"]
-                self.mode = config["mode"]
-                self.port = config["port"]
-                self.host = config["host"]
-
         for config in connection_configs:
-            config_obj = ConfigObject(config)
-            connection = Connection(config_obj)
+            # Accept both legacy dict configs and validated config objects.
+            # Loader paths now produce ConnectionConfig dataclass instances.
+            if isinstance(config, dict):
+                connection = Connection(**config)
+            else:
+                connection = Connection(config)
             self.connections.append(connection)
 
     def gather_os_info(self, connection):
@@ -53,6 +48,7 @@ class ConnectionPool:
             try:
                 result = subprocess.run(
                     ["scripts/os_info.sh"],
+                    stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
                     check=True
@@ -72,8 +68,14 @@ class ConnectionPool:
         logging.info("🚀 Starting the connection pool...")
 
         for connection in self.connections:
-            connection.open()
-            self.gather_os_info(connection)
+            try:
+                connection.open()
+                self.gather_os_info(connection)
+            except Exception as e:
+                logging.error(
+                    f"❌ Failed to open connection {connection.name} during startup: {e}",
+                    exc_info=True,
+                )
 
         self._schedule_monitor()
 
@@ -95,8 +97,14 @@ class ConnectionPool:
                     if connection.get_state() != ConnectionState.OPEN:
                         closed_found = True
                         logging.warning(f"⚠️ Connection {connection.name} is down. Attempting to reconnect...")
-                        connection.open()
-                        self.gather_os_info(connection)
+                        try:
+                            connection.open()
+                            self.gather_os_info(connection)
+                        except Exception as e:
+                            logging.error(
+                                f"❌ Reconnect failed for {connection.name}: {e}",
+                                exc_info=True,
+                            )
 
                 if closed_found:
                     logging.info("🔁 One or more connections were re-opened.")

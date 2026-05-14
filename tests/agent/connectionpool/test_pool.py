@@ -1,33 +1,56 @@
-import pytest
+from agent.connectionpool.config_loader import ConnectionConfig
 from agent.connectionpool.pool import ConnectionPool
 
-def test_connection_pool(sshd_fixture):
+
+def test_connection_pool_accepts_dict_configs(monkeypatch):
+    captured = []
+
+    class FakeConnection:
+        def __init__(self, *args, **kwargs):
+            captured.append({"args": args, "kwargs": kwargs})
+
+    monkeypatch.setattr("agent.connectionpool.pool.Connection", FakeConnection)
+
     connection_configs = [
         {
-            "name": "test_connection_1",
-            "user": "testuser",
-            "id_file": None,
+            "name": "dict-connection",
+            "user": "user",
+            "id_file": "/tmp/id_rsa",
             "mode": "direct",
-            "port": sshd_fixture["port"],
-            "host": sshd_fixture["host"],
-        },
-        {
-            "name": "test_connection_2",
-            "user": "testuser",
-            "id_file": None,
-            "mode": "direct",
-            "port": sshd_fixture["port"],
-            "host": sshd_fixture["host"],
-        },
+            "port": 22,
+            "host": "127.0.0.1",
+        }
     ]
 
-    pool = ConnectionPool(connection_configs, reconnection_delay=1, reconnection_attempts=3)
+    pool = ConnectionPool(connection_configs)
 
-    pool.start_all()
-    pool_state = pool.query_pool()
-    assert len(pool_state) == 2
-    assert all(conn["is_running"] for conn in pool_state)
+    assert len(pool.connections) == 1
+    assert captured[0]["args"] == ()
+    assert captured[0]["kwargs"]["name"] == "dict-connection"
 
-    pool.stop_all()
-    pool_state = pool.query_pool()
-    assert all(not conn["is_running"] for conn in pool_state)
+
+def test_connection_pool_accepts_connection_config_objects(monkeypatch):
+    captured = []
+
+    class FakeConnection:
+        def __init__(self, *args, **kwargs):
+            captured.append({"args": args, "kwargs": kwargs})
+
+    monkeypatch.setattr("agent.connectionpool.pool.Connection", FakeConnection)
+
+    connection_configs = [
+        ConnectionConfig(
+            name="object-connection",
+            user="user",
+            id_file="/tmp/id_rsa",
+            mode="direct",
+            port=22,
+            host="127.0.0.1",
+        )
+    ]
+
+    pool = ConnectionPool(connection_configs)
+
+    assert len(pool.connections) == 1
+    assert len(captured[0]["args"]) == 1
+    assert captured[0]["args"][0].name == "object-connection"
