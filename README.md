@@ -41,6 +41,10 @@ pytest
 
 ## Documentation
 
+- Documentation writing/governance standard: [`docs/DOCUMENTATION_GUIDE.md`](docs/DOCUMENTATION_GUIDE.md)
+- Architecture boundaries and invariants: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Testing intent and boundary enforcement: [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md)
+- Architectural decisions record: [`docs/ARCHITECTURAL_DECISIONS.md`](docs/ARCHITECTURAL_DECISIONS.md)
 - Edge mode guidance: [`docs/EDGE.md`](docs/EDGE.md)
 - Developer workflow: [`docs/DEVELOPER.md`](docs/DEVELOPER.md)
 - Security policy: [`docs/SECURITY.md`](docs/SECURITY.md)

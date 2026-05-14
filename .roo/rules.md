@@ -15,6 +15,13 @@
 - Before changing architecture, update docs to explain the new boundary.
 - Do not reference files that do not exist.
 
+## Documentation Governance
+
+- Treat [`docs/DOCUMENTATION_GUIDE.md`](../docs/DOCUMENTATION_GUIDE.md) as the authoritative standard for documentation style, placement, and governance.
+- Documentation must be updated before completing tasks that change behavior, boundaries, commands, or decisions.
+- Surface documentation conflicts or inaccuracies explicitly in task summaries so the team can decide whether to update docs or change implementation plans.
+- When architectural boundaries change, update [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md), [`docs/TESTING_STRATEGY.md`](../docs/TESTING_STRATEGY.md), and [`docs/ARCHITECTURAL_DECISIONS.md`](../docs/ARCHITECTURAL_DECISIONS.md) in the same slice when applicable.
+
 ## Testing and SSH Keys
 
 - Prefer generated temporary SSH keys in tests.
