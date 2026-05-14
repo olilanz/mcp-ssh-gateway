@@ -4,6 +4,7 @@ import time
 import socket
 import threading
 from agent.connectionpool.connection import Connection
+from agent.connectionpool.config_loader import ConnectionConfig
 
 
 def test_direct_connection_success(spawn_sshd):
@@ -108,3 +109,29 @@ def test_tunnel_connection_success(spawn_sshd, tmp_path):
     assert result.exit_code == 0
     assert result.stdout.strip() == "tunnel"
     assert result.stderr.strip() == ""
+
+
+def test_connection_constructor_accepts_config_and_kwargs():
+    config = ConnectionConfig(
+        name="ctor-config",
+        mode="direct",
+        user="u",
+        host="127.0.0.1",
+        port=22,
+        id_file="/tmp/id_rsa",
+    )
+
+    from_config = Connection(config)
+    from_kwargs = Connection(
+        name="ctor-kwargs",
+        mode="tunnel",
+        user="u2",
+        host="127.0.0.1",
+        port=22222,
+        id_file="/tmp/id_rsa_2",
+    )
+
+    assert from_config.name == "ctor-config"
+    assert from_config.mode.value == "direct"
+    assert from_kwargs.name == "ctor-kwargs"
+    assert from_kwargs.mode.value == "tunnel"

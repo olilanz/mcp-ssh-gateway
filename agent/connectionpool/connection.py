@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Optional, List
 from paramiko import SSHClient, AutoAddPolicy
 from agent.connection_result import CommandResult
-from agent.connectionpool.config_loader import ConnectionMode
+from agent.connectionpool.config_loader import ConnectionMode, ConnectionConfig
 
 # Setup basic logging
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s')
@@ -226,17 +226,8 @@ class Connection:
             # Assume config-style: Connection(config)
             config = args[0]
         else:
-            # Build config-style object from kwargs
-            class Config:
-                def __init__(self, name, mode, user, host, port, id_file):
-                    self.name = name
-                    self.mode = mode
-                    self.user = user
-                    self.host = host
-                    self.port = port
-                    self.id_file = id_file
-
-            config = Config(**kwargs)
+            # Build config from kwargs using existing validated dataclass shape
+            config = ConnectionConfig(**kwargs)
 
         mode = ConnectionMode(config.mode)
         self.impl = DirectConnection(config) if mode == ConnectionMode.DIRECT else TunnelConnection(config)

@@ -6,8 +6,7 @@ If you discover a security vulnerability in `mcp-ssh-gateway`, please **do not o
 
 Instead, contact the project maintainer **privately** to allow for responsible disclosure and a coordinated fix.
 
-Email: [security@yourdomain.example]  
-(Replace with actual contact address if available.)
+Email: [security@yourdomain.example]
 
 ---
 
@@ -25,11 +24,11 @@ We aim to patch critical security issues in the latest major version. Older vers
 
 `mcp-ssh-gateway` is designed with the following principles:
 
-- Reverse SSH only: edge devices initiate connections
+- Direct SSH and tunnel-probing support with key-based auth
 - No command execution allowed on the agent
 - Strict key-based authentication
 - Audit-friendly: deterministic, observable behavior
-- Secure by default: no open ports on edge systems
+- Tunnel listener/server behavior is not implemented in current code
 
 ---
 

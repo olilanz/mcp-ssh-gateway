@@ -11,6 +11,7 @@ RUN apt-get update && \
     libffi-dev libssl-dev \
     python3-pip \
     git \
+    && apt-get remove -y python3-jwt \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir --break-system-packages mcp[cli] mcpo pytest paramiko

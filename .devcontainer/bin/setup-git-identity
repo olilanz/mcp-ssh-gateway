@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Persist git identity in a named Docker volume mounted at /opt/shared-git-identity
+install -d -m 0755 /opt/shared-git-identity
+touch /opt/shared-git-identity/.gitconfig
+chmod 600 /opt/shared-git-identity/.gitconfig
+
+# Replace any regular file with symlink to shared location
+if [ -e /root/.gitconfig ] && [ ! -L /root/.gitconfig ]; then
+  rm -f /root/.gitconfig
+fi
+
+ln -sfn /opt/shared-git-identity/.gitconfig /root/.gitconfig
+
+echo "Git identity: /root/.gitconfig -> /opt/shared-git-identity/.gitconfig"

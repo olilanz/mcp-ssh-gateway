@@ -33,7 +33,11 @@ This is common in real-world edge scenarios:
 
 ### How It Works
 
-The agent starts an embedded SSH server using `paramiko`. The edge device connects to this SSH server and opens a reverse tunnel like so:
+Intended model: the edge opens an outbound reverse tunnel into the agent, and the agent then reaches the edge through the exposed local tunnel port.
+
+Current code boundary: `TunnelConnection` can probe and connect through an already exposed local tunnel port. The agent-side SSH server that accepts reverse tunnels is not implemented in the current code.
+
+Example of the intended edge-side reverse tunnel command:
 
 ```bash
 ssh -i edge.key \
