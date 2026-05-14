@@ -1,82 +1,139 @@
-# Connecting an Edge Device
+# Edge Connectivity
 
-Depending on your infrastructure and use case, you may choose between two connection modes:
+This document explains how remote environments connect to `mcp-ssh-gateway`.
 
-## ✅ Direct Mode ("direct")
+The gateway gives an LLM operational reach into remote environments. Those environments may expose shell access, tools, hardware, storage, network locality, or access into isolated infrastructure.
 
-Direct mode is the simplest option and works well in **trusted infrastructure**, where:
+The connection model determines how the gateway reaches those environments.
 
-* The agent can reach the edge directly over the network
-* The edge is on a VPN, local subnet, or has a fixed IP address
+## Direct Mode
 
-In this setup, the agent connects *to* the edge using SSH. The edge runs `sshd` and listens on a known IP and port.
+Direct mode is used when the remote environment is reachable from the gateway.
 
-**Recommended for:**
+The gateway opens outbound SSH connections directly to the remote machine.
 
-* Internal or development networks
-* When you control the edge environment and trust the network
+This is the simpler operational model and is appropriate for:
 
-No special configuration is needed on the edge, except:
+- internal infrastructure,
+- trusted networks,
+- VPN-connected systems,
+- development labs,
+- or environments with stable addressing.
 
-* Ensure `sshd` is running
-* Add the agent’s public key to `~/.ssh/authorized_keys`
+The remote environment typically runs `sshd` and exposes a reachable SSH endpoint.
 
-## 🔁 Tunnel Mode ("tunnel")
+Direct mode is recommended when inbound reachability is available and operational simplicity matters more than traversal flexibility.
 
-Tunnel mode is intended for **locked-down infrastructure**, where the edge is **not reachable from the agent**, but the agent is reachable from the edge.
+### Requirements
 
-This is common in real-world edge scenarios:
+The remote environment should:
 
-* Headless devices behind NAT or firewalls
-* Mobile or intermittent connectivity
-* Secure environments with outbound-only traffic
+- run `sshd`,
+- allow SSH access from the gateway,
+- and trust the gateway identity.
 
-### How It Works
+Passwordless connectivity is preferred.
 
-Intended model: the edge opens an outbound reverse tunnel into the agent, and the agent then reaches the edge through the exposed local tunnel port.
+## Reverse Tunnel Mode
 
-Current code boundary: `TunnelConnection` can probe and connect through an already exposed local tunnel port. The agent-side SSH server that accepts reverse tunnels is not implemented in the current code.
+Reverse tunnel mode is used when the remote environment is not reachable from the gateway, but can reach the gateway.
 
-Example of the intended edge-side reverse tunnel command:
+This is common for:
+
+- NATed infrastructure,
+- outbound-only networks,
+- headless devices,
+- mobile systems,
+- intermittent environments,
+- remote labs,
+- or restricted infrastructure.
+
+In this model:
+
+1. The remote environment initiates connectivity toward the gateway.
+2. The remote environment exposes its local SSH service through a reverse tunnel.
+3. The gateway connects back through the exposed local tunnel port.
+
+The operational model is currently configured using:
+
+```json
+{
+  "mode": "tunnel"
+}
+```
+
+The documentation uses “reverse tunnel mode” to describe the behavior clearly.
+
+### Example Reverse Tunnel
+
+Example edge-side reverse tunnel command:
 
 ```bash
 ssh -i edge.key \
     -R 22222:localhost:22 \
-    agent_user@agent_host -p <agent_tunnel_port>
+    gateway_user@gateway_host -p <gateway_tunnel_port>
 ```
 
-This exposes the edge's own `sshd` (on port 22) back through the tunnel. Once connected, the agent will:
+This exposes the edge environment's local SSH service back through the tunnel.
 
-* Detect the active tunnel
-* Connect to `127.0.0.1:22222`
-* Authenticate using its key
+Once active, the gateway can connect to the exposed local tunnel port.
 
-**Recommended for:**
+### Requirements
 
-* Headless, mobile, or firewalled edge devices
-* Environments where outbound tunnels are easier than inbound access
+The remote environment should:
 
-### Required on the Edge
+- run `sshd`,
+- possess an identity trusted by the gateway,
+- maintain outbound connectivity toward the gateway,
+- and maintain the reverse tunnel lifecycle.
 
-* `sshd` must be running
-* An identity key must be available to connect to the agent
-* A startup script or systemd service can be used to maintain the reverse tunnel
+Persistence may be implemented through:
 
-Example (simplified):
+- systemd,
+- autossh,
+- startup scripts,
+- or external orchestration.
 
-```bash
-ssh -N \
-    -o ExitOnForwardFailure=yes \
-    -i /etc/ssh/edge.key \
-    -R 22222:localhost:22 \
-    agent@agent.example.com -p 2222
-```
+## Discovery Expectations
 
-This command can be made persistent with `autossh`, a shell loop, or systemd.
+The gateway is designed to discover and normalize information about connected environments.
 
-## 🔐 Mutual Trust
+Discovery may include:
 
-Both sides must trust each other:
+- operating system,
+- architecture,
+- interpreters,
+- installed tooling,
+- network configuration,
+- GPU availability,
+- hardware characteristics,
+- local storage,
+- or workload-specific capabilities.
 
-* The edge must know the agent’s public key to allow the reverse tunnel
-* The agent must know the edge’s public key to connect back through the tunnel
+Discovered capabilities become part of the operational context exposed to the LLM.
+
+## Operational Trust
+
+The gateway owns:
+
+- SSH identities,
+- connection configuration,
+- discovery,
+- capability cache,
+- and transport mechanics.
+
+External orchestrators interact through MCP tools rather than direct network authority.
+
+The orchestrator gets capability, not custody.
+
+## Current Implementation Boundary
+
+Current code implements:
+
+- direct SSH connectivity,
+- reverse tunnel probing against already exposed local tunnel ports,
+- and connection lifecycle scaffolding.
+
+Current code does not yet implement a full agent-side reverse tunnel SSH listener lifecycle.
+
+Documentation and tests must not claim reverse tunnel listener behavior until it exists in code.
