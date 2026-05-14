@@ -6,6 +6,18 @@ __pycache__/
 *.sqlite
 *.log
 
-# Ddon't commit the dev keys. They are only used for local development and testing.
+# Python build/package artifacts
+build/
+dist/
+*.egg-info/
+
+# Python virtual environments
+.venv/
+venv/
+
+# Test/tooling caches
+.pytest_cache/
+
+# Don't commit the dev keys. They are only used for local development and testing.
 .devcontainer/devkeys/*
 .devcontainer/devconfig/*

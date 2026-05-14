@@ -14,7 +14,11 @@ RUN apt-get update && \
     && apt-get remove -y python3-jwt \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir --break-system-packages mcp[cli] mcpo pytest paramiko
+WORKDIR /app
+COPY pyproject.toml /app/pyproject.toml
+COPY agent /app/agent
+COPY app.py /app/app.py
+RUN pip install --no-cache-dir --break-system-packages .
 
 # Configure SSH daemon during build
 #RUN mkdir -p /etc/ssh && \
@@ -39,14 +43,9 @@ EXPOSE ${SSH_LISTEN_PORT}
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-# application code
-COPY app.py /app/app.py
-COPY agent /app/agent
-
 # helper scripts
 COPY scripts /app/scripts
 RUN chmod +x /app/scripts/*.sh
 
 # Default entrypoint
-WORKDIR /app
 ENTRYPOINT ["/app/entrypoint.sh"]
