@@ -39,4 +39,8 @@ set -e
 #service ssh start
 
 # Start the agent (MCP loop)
-exec mcpo --host 0.0.0.0 --port ${MCPO_PORT} -- python3 /app/app.py --connection-config /data/config/connections.json
+exec python3 /app/app.py \
+  --transport "${MCP_TRANSPORT:-streamable-http}" \
+  --host "${MCP_HOST:-0.0.0.0}" \
+  --port "${MCP_PORT:-8000}" \
+  --connection-config "${CONNECTION_CONFIG:-/data/config/connections.json}"

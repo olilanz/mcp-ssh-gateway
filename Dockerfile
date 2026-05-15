@@ -2,7 +2,7 @@ FROM ubuntu:24.04
 
 # fundamental configuration
 ENV SSH_LISTEN_PORT=22
-ENV MCPO_PORT=8000
+ENV MCP_PORT=8000
 
 # Install required packages
 RUN apt-get update && \
@@ -42,7 +42,7 @@ RUN pip install --no-cache-dir --break-system-packages .
 #    echo "AuthorizedKeysFile /etc/ssh/authorized_keys" >> /etc/ssh/sshd_config
 
 # environment setup
-EXPOSE ${MCPO_PORT}
+EXPOSE ${MCP_PORT}
 EXPOSE ${SSH_LISTEN_PORT}
 
 # startup script

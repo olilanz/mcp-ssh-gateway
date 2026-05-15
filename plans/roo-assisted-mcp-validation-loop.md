@@ -271,17 +271,18 @@ Scope:
 
 - Implement only the startup path required for a reliable listener.
 - Keep startup parameters simple and configurable.
-- Prefer native Python MCP HTTP path if viable; otherwise retain minimal `mcpo` path.
+- Use direct Python startup with MCP-native transport (no `mcpo` wrapper).
 
 Expected file changes in this step:
 
-- `app.py` and or `agent/run_agent.py` only if required for chosen transport wiring
-- no documentation edits in this step unless strictly required to run the command path
+- `entrypoint.sh` to execute `python3 /app/app.py` directly with env-defaulted args
+- `Dockerfile` env naming aligned to `MCP_PORT`
+- `pyproject.toml` dependency cleanup if `mcpo` is no longer required
 
 Validation commands:
 
 ```bash
-python3 app.py
+python3 app.py --transport streamable-http --host 0.0.0.0 --port 8000 --connection-config ''
 ss -ltnp | grep ':8000'
 ```
 
@@ -301,6 +302,13 @@ Phase 2 execution notes (actual run):
   - `python3 app.py`
   - with defaults in `app.py`: `transport=streamable-http`, `host=0.0.0.0`, `port=8000`, `connection_config=""`.
 - `scripts/start-agent.sh` was removed from the active validation path to avoid legacy defaults and indirection.
+- Container startup path aligned to direct Python execution in `entrypoint.sh` with env defaults:
+  - `MCP_TRANSPORT` default `streamable-http`
+  - `MCP_HOST` default `0.0.0.0`
+  - `MCP_PORT` default `8000`
+  - `CONNECTION_CONFIG` default `/data/config/connections.json`
+- `Dockerfile` now uses `MCP_PORT` (`ENV` + `EXPOSE`) for naming consistency.
+- `mcpo` removed from runtime dependencies in `pyproject.toml` because startup path no longer uses it.
 - Direct Python validation previously confirmed listener readiness when run with explicit equivalent arguments:
   - `python3 app.py --transport streamable-http --host 0.0.0.0 --port 8000 --connection-config ''`
   - broad and narrowed socket checks showed `python3` listening on `0.0.0.0:8000`.
@@ -323,7 +331,7 @@ Phase 2 execution notes (actual run):
 
 Scope:
 
-- Point Roo to chosen endpoint.
+- Point Roo to chosen MCP endpoint (`http://localhost:8000`).
 - Confirm tool enumeration.
 - Invoke one harmless status/read-only style tool, or record explicit gap.
 
@@ -333,7 +341,7 @@ Expected file changes in this step:
 
 Validation actions:
 
-- Roo endpoint connection attempt.
+- Roo endpoint connection attempt (`http://localhost:8000`).
 - Roo tool-list observation capture.
 - One harmless invocation capture, or tool-surface gap capture.
 
