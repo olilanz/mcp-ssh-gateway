@@ -185,31 +185,51 @@ Transition rule to Phase 4:
 
 - Go only when Phase 3A is complete and exploratory observations from Phase 3B are stable enough to convert at least one startup/config expectation into pytest scope.
 
-### Phase 4 — Regression coverage and documentation
+### Phase 4 — Immediate closeout: focused regression coverage, documentation, and ADR
 
 Goal:
 
-Turn stable findings into tests and document the process boundary.
+Close out the active slice with focused regression coverage, startup documentation, and the stateless streamable-http ADR. Scope is narrow — only items directly tied to stable Phase 1–3B findings.
 
-Tasks:
+Immediate closeout items:
 
-- Add or update pytest coverage for fixed startup/config behavior where appropriate.
-- Update `docs/DEVELOPER.md` with one concise section describing:
-  - manual start command,
-  - Roo exploratory MCP validation purpose and limits,
-  - Architect responsibilities,
-  - Orchestrator responsibilities,
-  - exploratory MCP calls are not regression tests,
-  - stable observations should become pytest coverage.
-- Keep documentation centralized. Do not spread this process across many files.
-- Update this plan status/checklist with actual findings.
+- Focused regression coverage where practical: convert stable startup/config findings from Phases 1–3B into pytest where a clear, reproducible expectation exists. Do not encode exploratory MCP call behavior as regression tests.
+- `docs/DEVELOPER.md`: add or update one concise section covering the basic startup command and the exploratory validation loop — purpose, limits, and role responsibilities.
+- ADR for the stateless streamable-http decision: record in `docs/adr-stateless-streamable-http.md` the rationale, trade-offs, and deferred work.
+- Plan status cleanup: update this plan checklist to reflect what was validated and what remains open.
+
+Explicit distinction (applies to this phase and forward):
+
+- **Roo MCP validation** = exploratory/product-surface validation. Used to confirm tool registration, request/response shape, and runtime behavior from the Roo client perspective. Observations are not deterministic regression proofs.
+- **pytest** = regression validation. Used to prove stable, reproducible expectations about startup behavior, configuration wiring, and tool dispatch logic.
+- These two roles must remain separate. Exploratory MCP calls do not replace pytest. Stable MCP observations may become pytest coverage only where a clear, deterministic expectation can be stated and verified.
 
 Exit criteria:
 
-- Relevant pytest tests pass.
-- `docs/DEVELOPER.md` contains the process boundary.
-- This plan records what was validated and what remains open.
-- The slice clearly separates exploratory MCP validation from pytest regression testing.
+- Focused pytest tests pass (where added), or the plan explicitly states that a specific coverage item is deferred with a recorded reason.
+- `docs/DEVELOPER.md` documents the basic startup command and the exploratory validation loop, with explicit wording that the restart-resilience behavior is specific to the current stateless streamable-http configuration (not a general claim about all gateway startups).
+- ADR-0004 is recorded in `docs/ARCHITECTURAL_DECISIONS.md` (not only as a standalone file) with the title "ADR-0004: Use stateless streamable HTTP for the development validation loop", covering decision, rationale, and deferred work.
+- This plan checklist is updated to reflect Phase 4 complete.
+- The distinction between Roo MCP validation (exploratory) and pytest (regression) is explicit in documentation.
+
+Phase 4 open items (not yet closed — Phase 4 is INCOMPLETE):
+
+1. **ADR-0004 not yet added to `docs/ARCHITECTURAL_DECISIONS.md`.**
+   - `docs/adr-stateless-streamable-http.md` exists as a standalone file but `docs/ARCHITECTURAL_DECISIONS.md` still only has ADR-0001 through ADR-0003. ADR-0004 must be added there.
+   - Suggested content for `docs/ARCHITECTURAL_DECISIONS.md`:
+     - Title: `ADR-0004: Use stateless streamable HTTP for the development validation loop`
+     - Decision: gateway uses `streamable-http` with `stateless_http=True` and `json_response=True`; SSE and stateful sessions are out of scope for this phase; stateful sessions may be revisited when concrete scenarios require them.
+     - Rationale: Roo-assisted validation must survive edit/restart/test cycles without stale client session failures; gateway product behavior must not depend on MCP transport-session state; stateless request/response matches current tool usage.
+     - Trade-off: no per-client MCP session memory; advanced stateful/session-continuity behavior is deferred.
+
+2. **pytest coverage decision not yet made explicit.**
+   - Either: add focused tests for CLI default transport wiring (e.g., confirm `--transport` default is `streamable-http`, `--host` default is `0.0.0.0`, `--port` default is `8000`) where the wiring can be tested without starting a live Uvicorn server.
+   - Or: update the plan to state explicitly that full MCP listener/Roo integration is exploratory and not covered by pytest in this slice, while lower-level startup/config wiring behavior is covered by existing or targeted unit tests.
+   - Do not claim Phase 4 complete until this decision is recorded.
+
+3. **`docs/DEVELOPER.md` wording fix required.**
+   - The phrase "After a gateway restart, Roo can call tools again without any session-reset action" is too general. It must be scoped to the stateless configuration explicitly:
+   - Replace with: "With the current stateless streamable-http configuration (`stateless_http=True, json_response=True`), Roo can call tools after a gateway restart without a session-reset action."
 
 ## Observation capture protocol
 
@@ -257,8 +277,14 @@ This slice is complete when all are true:
 - [x] Phase 2 completed with reliable manual startup path.
 - [x] Phase 3A completed with documented Roo MCP client validation procedure.
 - [x] Phase 3B completed with Roo smoke validation evidence.
-- [x] Phase 4 completed with pytest and documentation updates.
-- [ ] Phase 5 defined: Roo-assisted MCP validation as a development completion gate.
+- [ ] Phase 4 — **INCOMPLETE — two open items remain before Phase 4 can be closed**:
+  - [ ] ADR-0004 not yet recorded in `docs/ARCHITECTURAL_DECISIONS.md` (standalone `docs/adr-stateless-streamable-http.md` exists but is not linked from the ADR index).
+  - [ ] pytest coverage decision not yet explicit (add focused wiring tests or explicitly defer with recorded reason).
+  - [ ] `docs/DEVELOPER.md` wording fix required: scope the restart-resilience claim to the stateless streamable-http configuration.
+  - `docs/DEVELOPER.md` updated: startup command and exploratory validation loop documented ✅
+  - `docs/adr-stateless-streamable-http.md` created as standalone ADR file ✅
+  - Explicit Roo MCP (exploratory) vs pytest (regression) distinction written in plan ✅
+- [ ] Phase 5 — **PENDING REVIEW AND APPROVAL BEFORE EXECUTION**: Roo-assisted MCP validation as a development completion gate. Phase 5 is fully defined below but has not been executed. No code, docs, or tests will be changed until this plan is reviewed and approval is received.
 
 ## Orchestrator delivery plan
 
@@ -744,6 +770,12 @@ Phase 4 execution notes (actual run):
 
 ### Phase 5 — Roo-assisted MCP validation as a development completion gate
 
+> **STATUS: NOT YET IMPLEMENTED — PENDING REVIEW AND APPROVAL BEFORE EXECUTION.**
+>
+> Phase 5 is fully defined below. No code, documentation, tests, or Roo rules will be changed until this plan has been reviewed and explicit approval to proceed is received. Do not execute Phase 5 tasks in the current subtask.
+
+---
+
 Goal:
 
 Establish Roo-assisted MCP validation as a required development completion gate for future slices that change MCP-exposed behavior.
@@ -751,6 +783,12 @@ Establish Roo-assisted MCP validation as a required development completion gate 
 Rationale:
 
 The purpose of this slice is not only to prove that Roo can connect to the gateway once. The goal is to make live MCP validation a strong development pillar. Roo must validate changed MCP behavior through the running gateway before marking relevant tasks complete.
+
+Explicit distinction (core principle for this phase):
+
+- **Roo MCP validation** = exploratory/product-surface validation. Roo calls running gateway tools to confirm tool registration, input/output shape, and observable runtime behavior. These observations are not regression proofs and cannot substitute for pytest coverage.
+- **pytest** = regression validation. pytest encodes stable, deterministic expectations about startup wiring, config defaults, and tool dispatch behavior. These tests run in CI and must pass regardless of whether a gateway process is running.
+- Both are required. Neither replaces the other. The gate ensures Roo MCP validation happens at the product-surface level; pytest ensures regression proof happens at the code level.
 
 #### Gate applies when a task changes
 
@@ -772,7 +810,7 @@ The purpose of this slice is not only to prove that Roo can connect to the gatew
 
 #### Required validation evidence
 
-For each exploratory MCP validation run:
+For each exploratory MCP validation run, capture:
 
 - gateway startup method used
 - endpoint used
@@ -780,36 +818,37 @@ For each exploratory MCP validation run:
 - tool invocation performed
 - input used
 - result observed
-- relevant logs
+- relevant gateway logs
 - pass/fail conclusion
-- whether pytest coverage was added, updated, or intentionally deferred
+- whether pytest coverage was added, updated, or intentionally deferred (with reason)
 
 #### Architect responsibilities (Phase 5)
 
 - Decide whether the MCP validation gate applies to the slice.
 - Specify which tools or MCP-visible behaviors must be validated.
-- Keep exploratory MCP validation separate from regression proof.
+- Keep exploratory MCP validation (Roo) clearly separate from regression proof (pytest).
+- Approve Phase 5 plan before Orchestrator begins execution.
 
 #### Orchestrator responsibilities (Phase 5)
 
-- Execute the live MCP validation before claiming completion.
+- Execute the live MCP validation before claiming task completion.
 - Treat the running gateway as the system under test.
-- Use MCP calls only for exploratory validation of gateway behavior.
+- Use MCP calls only for exploratory validation of gateway behavior — not as a substitute for pytest.
 - Record validation evidence in the active plan or final task summary.
-- Convert stable expectations into pytest where appropriate.
+- Convert stable, deterministic MCP observations into pytest coverage where appropriate.
 
 #### Roo rule (Phase 5)
 
-When working on `mcp-ssh-gateway`, any task that changes MCP-exposed behavior must include live Roo-assisted MCP validation before completion. Treat the running gateway as the system under test. Use the stateless streamable-http endpoint at `http://localhost:8000/mcp`. MCP calls are exploratory validation only and do not replace pytest. Stable expectations discovered through MCP validation should become pytest coverage where practical.
+When working on `mcp-ssh-gateway`, any task that changes MCP-exposed behavior must include live Roo-assisted MCP validation before completion. Treat the running gateway as the system under test. Use the stateless streamable-http endpoint at `http://localhost:8000/mcp`. MCP calls are exploratory/product-surface validation only and do not replace pytest. Stable expectations discovered through MCP validation should become pytest coverage where practical and where a deterministic expectation can be stated.
 
 #### Phase 5 exit criteria
 
 - `docs/DEVELOPER.md` describes the MCP validation completion gate.
 - Roo rules/context contain the validation-gate rule.
 - The plan records that future MCP-exposed changes are not complete until live MCP validation evidence is captured.
-- The distinction is explicit:
-  - Roo MCP validation = exploratory/product-surface validation.
-  - pytest = regression validation.
+- The explicit distinction is written in both `docs/DEVELOPER.md` and Roo rules/context:
+  - **Roo MCP validation** = exploratory/product-surface validation.
+  - **pytest** = regression validation.
 
 ### Delivery constraints for Orchestrator execution
 
