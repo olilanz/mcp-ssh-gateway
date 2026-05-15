@@ -99,97 +99,23 @@ pytest tests/agent/connectionpool/test_connection.py -k constructor
 
 ## Roo-Assisted MCP Exploratory Validation Loop
 
-> **Completion gate**: Any task that changes MCP-exposed behavior must include live MCP validation before being marked complete. The gate scope and evidence requirements are defined here and enforced via [`.roo/rules.md`](.roo/rules.md).
+> **Completion gate**: Any task that changes MCP-exposed behavior must include live MCP validation before being marked complete. See [`docs/MCP_VALIDATION_GUIDE.md`](MCP_VALIDATION_GUIDE.md) for the full process, evidence requirements, and status report template. The gate is enforced via [`.roo/rules.md`](../.roo/rules.md).
 
-### Purpose
+### Quick reference
 
-Roo uses the running MCP gateway for exploratory validation of gateway behavior during development.
-This loop is for exploratory observation, not regression testing.
+- Startup: `python3 app.py`
+- Endpoint: `http://localhost:8000/mcp`
+- Transport: stateless streamable-http (`stateless_http=True`, `json_response=True`)
+- With this configuration, Roo can call tools after a gateway restart without a session-reset action.
+- SSE and stateful sessions are out of scope unless explicitly requested.
 
-### Network transport for this loop
+### Key distinctions
 
-The gateway uses stateless streamable-http for the development validation loop.
+- **Roo MCP validation** = exploratory/product-surface validation. Confirms tool registration, request/response shape, and runtime behavior from the Roo client perspective. Not a regression proof.
+- **pytest** = regression validation. Encodes stable, deterministic expectations about startup wiring, config defaults, and tool dispatch behavior. Runs in CI without a live gateway.
+- Both are required. Neither replaces the other.
 
-- Supported transport: `streamable-http` with `stateless_http=True` and `json_response=True`.
-- SSE and stateful sessions are out of scope for this loop.
-- With the current stateless streamable-http configuration, Roo can call tools after a gateway restart without a session-reset action.
-
-### Startup command
-
-```bash
-python3 app.py
-```
-
-Defaults: `transport=streamable-http`, `host=0.0.0.0`, `port=8000`, no managed connections.
-
-### Roo endpoint
-
-```
-http://localhost:8000/mcp
-```
-
-### Boundary
-
-- The gateway is the system under test.
-- Roo must not use the gateway as an unrelated automation substrate.
-
-### When to use Roo MCP validation
-
-Use MCP validation when a slice changes:
-
-- MCP tool registration or descriptions
-- tool input/output shape
-- command execution behavior
-- connection/pool visibility
-- logging or observability relevant to tool calls
-
-### When not to use Roo MCP validation
-
-- Do not use Roo MCP calls as regression tests.
-- Do not use them to replace pytest.
-- Do not use them for unrelated shell automation.
-
-### Standard validation loop
-
-1. Start gateway: `python3 app.py`
-2. Confirm Roo endpoint: `http://localhost:8000/mcp`
-3. Enumerate tools visible to Roo.
-4. Invoke the changed or relevant tool.
-5. Inspect result shape.
-6. Inspect gateway logs.
-7. Record observations in the active plan.
-8. Convert stable expectations into pytest where appropriate.
-
-### Evidence Roo must capture
-
-For each exploratory MCP validation:
-
-- tool called
-- input used
-- observed result
-- relevant log lines
-- pass/fail conclusion
-- whether a pytest should be added or updated
-
-### Architect responsibilities
-
-- Specify which MCP validations are required for a slice.
-- Decide whether a slice changes MCP tool behavior.
-- Keep exploratory validation separate from regression proof.
-
-### Orchestrator responsibilities
-
-- Execute the agreed exploratory validation steps.
-- Capture startup logs, visible tool surface, and invocation outcomes.
-- Record evidence in the active plan before claiming completion.
-- Add or update pytest coverage when behavior is stable and expectations are clear.
-
-### Process rules
-
-- Exploratory MCP calls are not regression tests.
-- Roo-assisted MCP validation is exploratory, not regression.
-- After stable behavior is observed, convert expectations into pytest.
-- If no harmless status/listing tool exists, record a tool-surface gap instead of inventing a test-only tool.
+For the iterative development loop, task-focused validation scope, lifecycle ownership rules, and the status report template, see [`docs/MCP_VALIDATION_GUIDE.md`](MCP_VALIDATION_GUIDE.md).
 
 ## Testing Philosophy
 

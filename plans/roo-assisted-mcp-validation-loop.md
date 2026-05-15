@@ -289,6 +289,18 @@ This slice is complete when all are true:
   - [x] MCP validation gate rule added to [`.roo/rules.md`](.roo/rules.md) with full required content (gate scope, evidence requirements, applies/does-not-apply conditions). ✅
   - [x] [`docs/DEVELOPER.md`](docs/DEVELOPER.md) updated: completion gate cross-reference added at top of Roo-Assisted MCP Exploratory Validation Loop section, pointing to [`.roo/rules.md`](.roo/rules.md). ✅
   - [x] This plan updated with Phase 5 completion evidence and checklist marked `[x]`. ✅
+- [x] Phase 6 — **COMPLETE**: Roo-owned validation lifecycle rehearsal.
+  - [x] Pre-existing gateway process (PID 2953730) blocking port 8000 killed before starting task-scoped process. ✅
+  - [x] Task-scoped gateway started: `python3 app.py > /tmp/gateway-phase6.log 2>&1 &` — PID **2964570**. ✅
+  - [x] Readiness confirmed after 1s: port 8000 listening + Uvicorn startup log observed. ✅
+  - [x] `get_status` called via Roo MCP → `{"status": "ok"}` — gateway log: `Processing request of type CallToolRequest` / `POST /mcp HTTP/1.1 200 OK`. ✅
+  - [x] `get_device_info` called via Roo MCP → `{"system": "Linux", "release": "6.12.54-Unraid", "machine": "x86_64"}` — gateway log: `POST /mcp HTTP/1.1 200 OK`. ✅
+  - [x] Tools enumerated via `tools/list` HTTP call: `get_status`, `get_device_info`, `run_command`, `upload_file`. ✅
+  - [x] Task-scoped process (PID 2964570) killed; port 8000 confirmed released; process confirmed dead. ✅
+  - [x] [`docs/MCP_VALIDATION_GUIDE.md`](docs/MCP_VALIDATION_GUIDE.md) created: full lifecycle guide covering validation model, smoke test, task-focused validation, iterative loop, lifecycle ownership rules, evidence requirements, completion gate, and status report template. ✅
+  - [x] [`.roo/rules.md`](.roo/rules.md) updated: long MCP Validation Gate section replaced with concise pointer to [`docs/MCP_VALIDATION_GUIDE.md`](docs/MCP_VALIDATION_GUIDE.md) plus non-negotiable summary. ✅
+  - [x] [`docs/DEVELOPER.md`](docs/DEVELOPER.md) updated: detailed validation section replaced with short summary and link to [`docs/MCP_VALIDATION_GUIDE.md`](docs/MCP_VALIDATION_GUIDE.md). ✅
+  - [x] This plan updated with Phase 6 completion evidence and checklist marked `[x]`. ✅
 
 ## Orchestrator delivery plan
 
