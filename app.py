@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 
+import argparse
 import logging
-import sys
-
-from agent.connectionpool.config_loader import load_connections, ConnectionConfigError
-from agent.connectionpool.pool import ConnectionPool
+from typing import Literal
 
 def configure_logging():
     logging.basicConfig(
@@ -15,47 +13,44 @@ def configure_logging():
 
 from agent.run_agent import run_agent
 
-if __name__ == "__main__":
-    import argparse
 
-    configure_logging()
-
-    # Parse command-line arguments
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="MCP Agent")
     parser.add_argument(
         "--connection-config",
         type=str,
-        default=None,
-        help="Path to the connection configuration file (optional)"
+        default="",
+        help="Path to the connection configuration file. Empty means no managed connections.",
     )
-    
-    args = parser.parse_args()
-    
-    if args.connection_config is None:
-        logging.warning("No connection configuration file supplied. The connection pool will not maintain any connections.")
-        connections = []
-    else:
-        try:
-            connections = load_connections(args.connection_config)
-        except ConnectionConfigError as e:
-            logging.error(f"Failed to load connections: {e}")
-            connections = []
-    
-    # Ensure args is defined before using it
-    if args.connection_config is None:
-        logging.warning("No connection configuration file supplied. The connection pool will not maintain any connections.")
-        connections = []
-    else:
-        try:
-            connections = load_connections(args.connection_config)
-        except ConnectionConfigError as e:
-            logging.error(f"Failed to load connections: {e}")
-            connections = []
-    
-    # Pass the configuration file path to run_agent
-    if args.connection_config is not None:
-        run_agent(config_path=args.connection_config)
-    else:
-        logging.warning("No connection configuration file supplied. Passing an empty array of connections.")
-        run_agent(config_path="")
+    parser.add_argument(
+        "--transport",
+        type=str,
+        choices=["stdio", "sse", "streamable-http"],
+        default="stdio",
+        help="FastMCP transport to run.",
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Listener host for network transports.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Listener port for network transports.",
+    )
+    return parser.parse_args()
 
+if __name__ == "__main__":
+    configure_logging()
+    args = parse_args()
+
+    transport = args.transport
+    run_agent(
+        config_path=args.connection_config,
+        transport=transport,
+        host=args.host,
+        port=args.port,
+    )

@@ -1,12 +1,18 @@
 import logging
 import threading
+from typing import Literal
 from mcp.server.fastmcp import FastMCP
 from agent.connectionpool.config_loader import ConnectionConfigError
 import time
 import os
 from agent import mcp_handlers
 
-def run_agent(config_path="connections.json"):
+def run_agent(
+    config_path="connections.json",
+    transport: Literal["stdio", "sse", "streamable-http"] = "stdio",
+    host="127.0.0.1",
+    port=8000,
+):
     from agent.connectionpool.config_loader import load_and_parse_connections
     from agent.connectionpool.pool import ConnectionPool
     import signal
@@ -14,11 +20,15 @@ def run_agent(config_path="connections.json"):
 
     logging.info("Initializing MCP agent...")
 
-    try:
-        connections = load_and_parse_connections(config_path)
-    except (FileNotFoundError, ConnectionConfigError) as e:
-        logging.error(f"❌ Configuration error: {e}")
-        sys.exit(1)
+    if config_path:
+        try:
+            connections = load_and_parse_connections(config_path)
+        except (FileNotFoundError, ConnectionConfigError) as e:
+            logging.error(f"❌ Configuration error: {e}")
+            sys.exit(1)
+    else:
+        logging.warning("No connection configuration supplied. Starting with an empty pool.")
+        connections = []
 
     pool = ConnectionPool(connections)
 
@@ -36,8 +46,10 @@ def run_agent(config_path="connections.json"):
     logging.info(f"🔍 Initial connection pool state: {pool.query_pool()}")
 
     # Start MCP loop (blocking)
-    from agent import mcp_handlers
-    mcp = FastMCP(name="mcp-ssh-gateway")
+    mcp = FastMCP(name="mcp-ssh-gateway", host=host, port=port)
     mcp_handlers.register_tools(mcp)
-    logging.info("Agent registered all handlers. MCP loop initiated.")
-    mcp.run(transport="stdio")
+    logging.info(
+        "Agent registered all handlers. MCP loop initiated "
+        f"(transport={transport}, host={host}, port={port})."
+    )
+    mcp.run(transport=transport)

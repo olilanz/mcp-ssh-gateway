@@ -100,6 +100,15 @@ Phase 1 findings recorded:
   - Candidate for removal from dev startup path is plausible based on available native transports.
   - Final remove/retain decision is deferred until Phase 2 startup proof is completed and reviewed.
 
+Phase 2 pre-implementation SDK findings:
+
+- `FastMCP.run(transport='streamable-http')` dispatches to `run_streamable_http_async`.
+- `run_streamable_http_async` creates a Uvicorn server from `self.streamable_http_app()`.
+- Host and port are taken from `self.settings.host` and `self.settings.port`.
+- Log level is taken from `self.settings.log_level`.
+- `mount_path` is not used for `streamable-http` in `FastMCP.run(...)` and is only threaded for `sse`.
+- Endpoint readiness checks in Phase 2 should target the MCP streamable HTTP endpoint surface, not a custom REST contract.
+
 ### Phase 2 — Minimal startup implementation
 
 Goal:
@@ -286,6 +295,27 @@ Stop/Go criteria:
 
 - Go when startup succeeds and listener is present on expected port after one restart cycle.
 - Stop if fixes expand into broad lifecycle infrastructure or unrelated gateway features.
+
+Phase 2 execution notes (actual run):
+
+- Actual startup command shape now used by [`scripts/start-agent.sh`](scripts/start-agent.sh):
+  - `python3 app.py --transport streamable-http --host 0.0.0.0 --port 8000 --connection-config <value>`
+  - Default `<value>` in script is `/data/config/connections.json`; an additional run used `CONNECTION_CONFIG=''`.
+- Validation commands executed:
+  - `bash scripts/start-agent.sh`
+  - `ss -ltnp | grep ':8000'`
+  - stop/start cycle repeated, then `ss -ltnp | grep ':8000'` again.
+- Logs/observations:
+  - Agent process stays up and repeatedly logs connection-pool reconnect attempts.
+  - Observed recurring SSH-side errors from existing connection targets (`Invalid key` and `Error reading SSH protocol banner`).
+  - No startup evidence of a bound MCP listener on port 8000 in this run.
+- Listener check results:
+  - First cycle: `ss -ltnp | grep ':8000'` returned no match.
+  - Second cycle (after stop/start): `ss -ltnp | grep ':8000'` returned no match.
+- Unresolved blocker:
+  - Expected streamable HTTP listener was not observed on `:8000` despite process running; startup path wiring is implemented but listener readiness is not yet proven in this environment.
+- Endpoint shape note:
+  - Endpoint shape is explicitly treated as observed/not-assumed; this step did not infer any `mount_path` route and did not assume endpoint URL shape from configuration alone.
 
 ### Delivery Step 3 — Execute Phase 3 Roo connection smoke validation
 
