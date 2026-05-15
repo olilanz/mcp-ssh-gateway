@@ -62,7 +62,7 @@ def spawn_sshd():
     """Spawn an isolated local sshd process for functional SSH testing."""
     # Find sshd binary before creating tempdir
     sshd_bin = which("sshd") or "/usr/sbin/sshd"
-    if not os.path.isfile(sshd_bin):
+    if not os.path.exists(sshd_bin) or not os.access(sshd_bin, os.X_OK):
         pytest.skip("sshd binary not available")
 
     tempdir = tempfile.mkdtemp(prefix="sshd_fixture_")

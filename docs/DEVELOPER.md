@@ -69,6 +69,14 @@ Recommended environment:
 
 Development container support may exist for convenience, but the project should remain runnable without specialized orchestration.
 
+### Key directory requirements
+
+The agent requires a writable key directory at startup. The default is `/data/keys`
+(set via `--agent-key-dir`). When running locally or in a container, ensure this
+directory exists and is writable by the process user, or override it:
+
+    python3 app.py --agent-key-dir /tmp/my-keys
+
 ## Install Dependencies
 
 ```bash

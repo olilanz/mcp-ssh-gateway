@@ -56,10 +56,7 @@ def test_direct_connection_key_mismatch(spawn_sshd, tmp_path):
         conn.open()
 
 
-@pytest.mark.xfail(
-    reason="Agent-side reverse tunnel listener lifecycle is not implemented; "
-           "TunnelConnection.run() sleeps indefinitely rather than accepting connections"
-)
+@pytest.mark.skip(reason="Agent-side reverse tunnel listener lifecycle is not implemented")
 @pytest.mark.functional
 @pytest.mark.requires_sshd
 def test_tunnel_connection_success(spawn_sshd, tmp_path):
