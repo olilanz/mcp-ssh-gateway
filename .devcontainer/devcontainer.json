@@ -7,7 +7,7 @@
   "containerEnv": {
     "AUTO_UPDATE": "1"
   },
-  "remoteUser": "root",
+  "remoteUser": "vscode",
   "customizations": {
     "vscode": {
       "settings": {
@@ -26,7 +26,9 @@
   "mounts": [
     "source=${localWorkspaceFolder}/.devcontainer/devkeys,target=/data/keys,type=bind",
     "source=${localWorkspaceFolder}/.devcontainer/devconfig,target=/data/config,type=bind",
-    "source=shared_git_identity,target=/opt/shared-git-identity,type=volume"
+    "source=shared_git_identity,target=/opt/shared-git-identity,type=volume",
+    "source=mcp-ssh-gateway-vscode-server,target=/home/vscode/.vscode-server,type=volume",
+    "source=mcp-ssh-gateway-roo,target=/home/vscode/.roo,type=volume"
   ],
   "postStartCommand": "bash /workspaces/mcp-ssh-gateway/.devcontainer/bin/setup-git-identity",
   "forwardPorts": [

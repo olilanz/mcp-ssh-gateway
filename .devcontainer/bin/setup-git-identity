@@ -5,12 +5,14 @@ set -euo pipefail
 install -d -m 0755 /opt/shared-git-identity
 touch /opt/shared-git-identity/.gitconfig
 chmod 600 /opt/shared-git-identity/.gitconfig
+chown vscode:vscode /opt/shared-git-identity /opt/shared-git-identity/.gitconfig
 
 # Replace any regular file with symlink to shared location
-if [ -e /root/.gitconfig ] && [ ! -L /root/.gitconfig ]; then
-  rm -f /root/.gitconfig
+if [ -e /home/vscode/.gitconfig ] && [ ! -L /home/vscode/.gitconfig ]; then
+  rm -f /home/vscode/.gitconfig
 fi
 
-ln -sfn /opt/shared-git-identity/.gitconfig /root/.gitconfig
+ln -sfn /opt/shared-git-identity/.gitconfig /home/vscode/.gitconfig
+chown -h vscode:vscode /home/vscode/.gitconfig
 
-echo "Git identity: /root/.gitconfig -> /opt/shared-git-identity/.gitconfig"
+echo "Git identity: /home/vscode/.gitconfig -> /opt/shared-git-identity/.gitconfig"
