@@ -7,6 +7,8 @@ from agent.connectionpool.connection import Connection
 from agent.connectionpool.config_loader import ConnectionConfig
 
 
+@pytest.mark.functional
+@pytest.mark.requires_sshd
 def test_direct_connection_success(spawn_sshd):
     sshd = spawn_sshd
 
@@ -16,7 +18,7 @@ def test_direct_connection_success(spawn_sshd):
         user=sshd.user,
         host="127.0.0.1",
         port=sshd.port,
-        id_file=sshd.agent_id_file,
+        id_file=sshd.client_key_path,
     )
 
     conn.open()
@@ -27,13 +29,16 @@ def test_direct_connection_success(spawn_sshd):
     assert result.stderr.strip() == ""
 
 
+@pytest.mark.functional
+@pytest.mark.requires_sshd
 def test_direct_connection_key_mismatch(spawn_sshd, tmp_path):
     sshd = spawn_sshd
 
     # Generate a new identity key not in authorized_keys
-    wrong_key = tmp_path / "wrong_id_rsa"
-    subprocess.run(["ssh-keygen", "-t", "rsa", "-f", str(wrong_key), "-N", ""], check=True)
+    wrong_key = tmp_path / "wrong_ed25519"
+    subprocess.run(["ssh-keygen", "-t", "ed25519", "-f", str(wrong_key), "-N", ""], check=True, capture_output=True)
 
+    import paramiko
     conn = Connection(
         name="test-wrong-key",
         mode="direct",
@@ -43,13 +48,13 @@ def test_direct_connection_key_mismatch(spawn_sshd, tmp_path):
         id_file=str(wrong_key),
     )
 
-    conn.open()
-    result = conn.execute("echo unreachable")
-
-    assert result.exit_code != 0
-    assert "Permission denied" in result.stderr or "Authentication failed" in result.stderr
+    # DirectConnection.open() raises AuthenticationException on key mismatch
+    with pytest.raises(paramiko.AuthenticationException):
+        conn.open()
 
 
+@pytest.mark.functional
+@pytest.mark.requires_sshd
 def test_tunnel_connection_success(spawn_sshd, tmp_path):
     sshd = spawn_sshd
 
@@ -68,7 +73,7 @@ def test_tunnel_connection_success(spawn_sshd, tmp_path):
             user="dummy",
             host="127.0.0.1",
             port=listener_port,
-            id_file=sshd.agent_id_file,
+            id_file=sshd.client_key_path,
         ).run()
 
     listener_thread = threading.Thread(target=run_tunnel_listener, daemon=True)
@@ -83,7 +88,7 @@ def test_tunnel_connection_success(spawn_sshd, tmp_path):
         "ssh",
         "-N",
         "-o", "ExitOnForwardFailure=yes",
-        "-i", sshd.agent_id_file,
+        "-i", sshd.client_key_path,
         "-R", f"{tunnel_port}:localhost:{sshd.port}",
         "127.0.0.1",
         "-p", str(listener_port)
@@ -97,7 +102,7 @@ def test_tunnel_connection_success(spawn_sshd, tmp_path):
         user=sshd.user,
         host="127.0.0.1",
         port=tunnel_port,
-        id_file=sshd.agent_id_file,
+        id_file=sshd.client_key_path,
     )
 
     conn.open()

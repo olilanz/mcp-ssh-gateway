@@ -50,6 +50,23 @@ The orchestrator gets capability, not custody.
 
 This allows tools such as Open WebUI, n8n, OpenClaw, or other MCP clients to reach real systems without becoming the owner of remote credentials or connection mechanics.
 
+### Agent SSH Identity
+
+The gateway agent has its own persistent SSH identity — an ed25519 keypair stored in
+the configured key directory (default: `/data/keys`). This identity is generated once
+at startup if not present, and reused on subsequent starts.
+
+The public key may be retrieved through the `get_agent_public_key` MCP tool. An
+operator installs this public key on a managed node to grant the agent SSH access —
+the manual equivalent of running `ssh-copy-id`.
+
+The private key is never exposed through MCP or any API. It is protected by filesystem
+permissions (`0600`).
+
+> Current connections may still reference a per-connection `id_file` until SSH
+> identity handling is consolidated. The agent identity is the intended default for
+> future node onboarding and outbound node access.
+
 ### Node
 
 A node is the managed identity: a named, configured SSH-reachable execution environment.

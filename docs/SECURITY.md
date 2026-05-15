@@ -114,6 +114,19 @@ When bootstrap is implemented, `add_node` will:
 
 Documentation and tests must not claim bootstrap behavior until it exists in code.
 
+## Agent SSH Identity
+
+The gateway agent maintains its own SSH identity (ed25519 keypair) stored in the
+configured key directory. The public key is available through the
+`get_agent_public_key` MCP tool and can be installed on a managed node to grant
+the agent SSH access.
+
+The private key:
+- Is stored at `<key_dir>/agent_id_ed25519`
+- Has permissions `0600`
+- Is **never** returned through any MCP tool or API
+- Has no passphrase — access is controlled by filesystem permissions
+
 ## Reverse Tunnel Security
 
 Reverse tunnel mode is intended for environments where the gateway cannot directly reach the remote machine.

@@ -17,3 +17,9 @@ dev = [
 
 [tool.setuptools]
 packages = ["agent"]
+
+[tool.pytest.ini_options]
+markers = [
+    "functional: marks tests that require real system resources (sshd, network)",
+    "requires_sshd: marks tests that require a running sshd fixture",
+]

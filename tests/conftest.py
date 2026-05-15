@@ -1,9 +1,3 @@
 # tests/conftest.py
 
-import pytest
-from tests.agent.connectionpool.conftest import sshd_fixture as spawn_sshd
-
-# Re-export the fixture for test modules
-@pytest.fixture
-def sshd_server(spawn_sshd):
-    yield spawn_sshd
+from tests.sshd_fixture import spawn_sshd  # noqa: F401 — pytest discovers by name

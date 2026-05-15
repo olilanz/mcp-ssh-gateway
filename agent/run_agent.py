@@ -9,12 +9,14 @@ from agent import mcp_handlers
 from agent.nodes.models import NodeConfig, NodeInfoCache
 from agent.nodes.registry import NodeRegistry
 from agent.nodes.service import NodeService
+from agent.identity.service import AgentIdentityService
 
 def run_agent(
     config_path="connections.json",
     transport: Literal["stdio", "sse", "streamable-http"] = "stdio",
     host="127.0.0.1",
     port=8000,
+    agent_key_dir="/data/keys",
 ):
     from agent.connectionpool.config_loader import load_and_parse_connections
     from agent.connectionpool.pool import ConnectionPool
@@ -22,6 +24,11 @@ def run_agent(
     import sys
 
     logging.info("Initializing MCP agent...")
+
+    # Initialize agent SSH identity early, before the connection pool
+    agent_identity_service = AgentIdentityService(key_dir=agent_key_dir)
+    agent_identity = agent_identity_service.ensure_agent_identity()
+    logging.info("Agent SSH identity ready. Fingerprint: %s", agent_identity.fingerprint)
 
     if config_path:
         try:
@@ -69,7 +76,7 @@ def run_agent(
     settings_host = getattr(getattr(mcp, "settings", None), "host", None)
     settings_port = getattr(getattr(mcp, "settings", None), "port", None)
     settings_log_level = getattr(getattr(mcp, "settings", None), "log_level", None)
-    mcp_handlers.register_tools(mcp, node_service)
+    mcp_handlers.register_tools(mcp, node_service, agent_identity_service)
     logging.info(
         "Agent registered all handlers. MCP loop initiated "
         f"(transport={transport}, host={host}, port={port})."

@@ -3,7 +3,7 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-def register_tools(mcp: FastMCP, node_service):
+def register_tools(mcp: FastMCP, node_service, agent_identity_service=None):
 
     @mcp.tool()
     def get_node_status() -> dict:
@@ -50,6 +50,16 @@ def register_tools(mcp: FastMCP, node_service):
             return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.returncode}
         except subprocess.CalledProcessError as e:
             return {"stdout": e.stdout, "stderr": e.stderr, "exit_code": e.returncode}
+
+    @mcp.tool()
+    def get_agent_public_key() -> dict:
+        """Return the agent's SSH public key for installation on managed nodes."""
+        identity = agent_identity_service.get_identity()
+        return {
+            "public_key": identity.public_key,
+            "fingerprint": identity.fingerprint,
+            "key_type": identity.key_type,
+        }
 
     @mcp.tool()
     def upload_file(path, data_b64, mode="0644"):

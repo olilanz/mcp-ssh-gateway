@@ -38,6 +38,11 @@ def make_mock_node_service():
     return svc
 
 
+def make_mock_identity_service():
+    """Return a MagicMock standing in for AgentIdentityService."""
+    return MagicMock()
+
+
 def _tool_names(mcp: FastMCP) -> list:
     """Return list of registered tool names from a FastMCP instance."""
     return [t.name for t in mcp._tool_manager.list_tools()]
@@ -59,7 +64,7 @@ def test_tool_registration_includes_all_six_node_tools():
     """All 6 node management tools must be registered."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
-    mcp_handlers.register_tools(mcp, svc)
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
     names = _tool_names(mcp)
     for expected in ["get_node_status", "get_node_info", "add_node", "remove_node", "enable_node", "disable_node"]:
@@ -70,7 +75,7 @@ def test_get_device_info_not_registered():
     """get_device_info must NOT be registered (retired in this slice)."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
-    mcp_handlers.register_tools(mcp, svc)
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
     names = _tool_names(mcp)
     assert "get_device_info" not in names, (
@@ -82,7 +87,7 @@ def test_get_status_not_registered():
     """get_status must NOT be registered (renamed to get_node_status in this slice)."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
-    mcp_handlers.register_tools(mcp, svc)
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
     names = _tool_names(mcp)
     assert "get_status" not in names, (
@@ -94,7 +99,7 @@ def test_run_command_still_registered():
     """run_command must remain registered (unrelated execution primitive)."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
-    mcp_handlers.register_tools(mcp, svc)
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
     assert "run_command" in _tool_names(mcp)
 
@@ -103,7 +108,7 @@ def test_upload_file_still_registered():
     """upload_file must remain registered (unrelated execution primitive)."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
-    mcp_handlers.register_tools(mcp, svc)
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
     assert "upload_file" in _tool_names(mcp)
 
@@ -116,7 +121,7 @@ def test_get_node_status_delegates_to_service():
     """get_node_status handler must delegate to node_service.get_node_status() and return its result."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
-    mcp_handlers.register_tools(mcp, svc)
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
     fn = _get_tool_fn(mcp, "get_node_status")
     result = fn()
@@ -129,7 +134,7 @@ def test_get_node_info_delegates_to_service():
     """get_node_info handler must call node_service.get_node_info() with name and refresh."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
-    mcp_handlers.register_tools(mcp, svc)
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
     fn = _get_tool_fn(mcp, "get_node_info")
     result = fn(name="node-a", refresh=True)
@@ -142,7 +147,7 @@ def test_add_node_delegates_to_service():
     """add_node handler must call node_service.add_node() with all required arguments."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
-    mcp_handlers.register_tools(mcp, svc)
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
     fn = _get_tool_fn(mcp, "add_node")
     result = fn(name="node-b", host="192.168.1.5", port=22, user="pi", password="secret", mode="direct")
@@ -157,7 +162,7 @@ def test_remove_node_delegates_to_service():
     """remove_node handler must call node_service.remove_node() with name."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
-    mcp_handlers.register_tools(mcp, svc)
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
     fn = _get_tool_fn(mcp, "remove_node")
     result = fn(name="node-c")
@@ -170,7 +175,7 @@ def test_enable_node_delegates_to_service():
     """enable_node handler must call node_service.enable_node() with name and validate."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
-    mcp_handlers.register_tools(mcp, svc)
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
     fn = _get_tool_fn(mcp, "enable_node")
     result = fn(name="node-d", validate=True)
@@ -183,7 +188,7 @@ def test_disable_node_delegates_to_service():
     """disable_node handler must call node_service.disable_node() with name."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
-    mcp_handlers.register_tools(mcp, svc)
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
     fn = _get_tool_fn(mcp, "disable_node")
     result = fn(name="node-e")
@@ -197,8 +202,8 @@ def test_disable_node_delegates_to_service():
 # ---------------------------------------------------------------------------
 
 def test_register_tools_signature_accepts_node_service():
-    """register_tools(mcp, node_service) must not raise — validates new 2-arg signature."""
+    """register_tools(mcp, node_service) must not raise — validates backward-compat 2-arg call."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
-    # Must not raise TypeError or any other exception
+    # Must not raise TypeError or any other exception (agent_identity_service defaults to None)
     mcp_handlers.register_tools(mcp, svc)

@@ -41,6 +41,12 @@ def parse_args() -> argparse.Namespace:
         default=8000,
         help="Listener port for network transports.",
     )
+    parser.add_argument(
+        "--agent-key-dir",
+        type=str,
+        default="/data/keys",
+        help="Directory where the agent's persistent SSH keypair is stored.",
+    )
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -53,4 +59,5 @@ if __name__ == "__main__":
         transport=transport,
         host=args.host,
         port=args.port,
+        agent_key_dir=args.agent_key_dir,
     )
