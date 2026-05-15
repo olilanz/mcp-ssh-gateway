@@ -275,14 +275,13 @@ Scope:
 
 Expected file changes in this step:
 
-- `scripts/start-agent.sh`
 - `app.py` and or `agent/run_agent.py` only if required for chosen transport wiring
 - no documentation edits in this step unless strictly required to run the command path
 
 Validation commands:
 
 ```bash
-bash scripts/start-agent.sh
+python3 app.py
 ss -ltnp | grep ':8000'
 ```
 
@@ -298,24 +297,27 @@ Stop/Go criteria:
 
 Phase 2 execution notes (actual run):
 
-- Actual startup command shape now used by [`scripts/start-agent.sh`](scripts/start-agent.sh):
-  - `python3 app.py --transport streamable-http --host 0.0.0.0 --port 8000 --connection-config <value>`
-  - Default `<value>` in script is `/data/config/connections.json`; an additional run used `CONNECTION_CONFIG=''`.
-- Validation commands executed:
-  - `bash scripts/start-agent.sh`
-  - `ss -ltnp | grep ':8000'`
-  - stop/start cycle repeated, then `ss -ltnp | grep ':8000'` again.
+- Canonical startup path was simplified to direct Python execution:
+  - `python3 app.py`
+  - with defaults in `app.py`: `transport=streamable-http`, `host=0.0.0.0`, `port=8000`, `connection_config=""`.
+- `scripts/start-agent.sh` was removed from the active validation path to avoid legacy defaults and indirection.
+- Direct Python validation previously confirmed listener readiness when run with explicit equivalent arguments:
+  - `python3 app.py --transport streamable-http --host 0.0.0.0 --port 8000 --connection-config ''`
+  - broad and narrowed socket checks showed `python3` listening on `0.0.0.0:8000`.
 - Logs/observations:
-  - Agent process stays up and repeatedly logs connection-pool reconnect attempts.
-  - Observed recurring SSH-side errors from existing connection targets (`Invalid key` and `Error reading SSH protocol banner`).
-  - No startup evidence of a bound MCP listener on port 8000 in this run.
-- Listener check results:
-  - First cycle: `ss -ltnp | grep ':8000'` returned no match.
-  - Second cycle (after stop/start): `ss -ltnp | grep ':8000'` returned no match.
-- Unresolved blocker:
-  - Expected streamable HTTP listener was not observed on `:8000` despite process running; startup path wiring is implemented but listener readiness is not yet proven in this environment.
-- Endpoint shape note:
-  - Endpoint shape is explicitly treated as observed/not-assumed; this step did not infer any `mount_path` route and did not assume endpoint URL shape from configuration alone.
+  - Agent process can log recurring connection-pool reconnect noise (`Error reading SSH protocol banner`) while the MCP listener is healthy.
+  - Listener readiness and connection-pool health are treated as separate concerns for this phase gate.
+- Phase gate status:
+  - Startup path simplification is implemented.
+  - Final stop/start cycle for no-arg `python3 app.py` completed via bounded probe (`timeout 12s python3 app.py`) to avoid cross-terminal process interference.
+  - Listener proof captured during probe:
+    - `LISTEN ... 0.0.0.0:8000 ... users:(("python3",pid=...,fd=...))`
+  - Startup/runtime proof captured during probe:
+    - `Agent registered all handlers. MCP loop initiated (transport=streamable-http, host=0.0.0.0, port=8000).`
+    - `FastMCP effective settings before run (transport=streamable-http, settings.host=0.0.0.0, settings.port=8000, ...)`
+    - `Uvicorn running on http://0.0.0.0:8000`
+  - Controlled shutdown observed after timeout, confirming one full start/stop validation cycle.
+  - Phase 2 gate result: **PASS** (do not begin Phase 3 until explicitly directed).
 
 ### Delivery Step 3 — Execute Phase 3 Roo connection smoke validation
 

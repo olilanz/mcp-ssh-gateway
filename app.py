@@ -26,13 +26,13 @@ def parse_args() -> argparse.Namespace:
         "--transport",
         type=str,
         choices=["stdio", "sse", "streamable-http"],
-        default="stdio",
+        default="streamable-http",
         help="FastMCP transport to run.",
     )
     parser.add_argument(
         "--host",
         type=str,
-        default="127.0.0.1",
+        default="0.0.0.0",
         help="Listener host for network transports.",
     )
     parser.add_argument(

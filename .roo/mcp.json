@@ -1,0 +1,13 @@
+{
+	"mcpServers": {
+		"mcp-ssh-gateway-test": {
+			"type": "streamable-http",
+			"url": "http://localhost:8000/mcp",
+			"disabled": false,
+			"alwaysAllow": [
+				"get_device_info",
+				"get_status"
+			]
+		}
+	}
+}

@@ -47,9 +47,17 @@ def run_agent(
 
     # Start MCP loop (blocking)
     mcp = FastMCP(name="mcp-ssh-gateway", host=host, port=port)
+    settings_host = getattr(getattr(mcp, "settings", None), "host", None)
+    settings_port = getattr(getattr(mcp, "settings", None), "port", None)
+    settings_log_level = getattr(getattr(mcp, "settings", None), "log_level", None)
     mcp_handlers.register_tools(mcp)
     logging.info(
         "Agent registered all handlers. MCP loop initiated "
         f"(transport={transport}, host={host}, port={port})."
+    )
+    logging.info(
+        "FastMCP effective settings before run "
+        f"(transport={transport}, settings.host={settings_host}, "
+        f"settings.port={settings_port}, settings.log_level={settings_log_level})."
     )
     mcp.run(transport=transport)
