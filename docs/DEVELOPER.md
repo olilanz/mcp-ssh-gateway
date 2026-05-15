@@ -99,6 +99,8 @@ pytest tests/agent/connectionpool/test_connection.py -k constructor
 
 ## Roo-Assisted MCP Exploratory Validation Loop
 
+> **Completion gate**: Any task that changes MCP-exposed behavior must include live MCP validation before being marked complete. The gate scope and evidence requirements are defined here and enforced via [`.roo/rules.md`](.roo/rules.md).
+
 ### Purpose
 
 Roo uses the running MCP gateway for exploratory validation of gateway behavior during development.

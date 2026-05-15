@@ -285,7 +285,10 @@ This slice is complete when all are true:
   - `docs/DEVELOPER.md` updated: startup command and exploratory validation loop documented ✅
   - `docs/adr-stateless-streamable-http.md` created as standalone ADR file ✅
   - Explicit Roo MCP (exploratory) vs pytest (regression) distinction written in plan ✅
-- [ ] Phase 5 — **PENDING REVIEW AND APPROVAL BEFORE EXECUTION**: Roo-assisted MCP validation as a development completion gate. Phase 5 is fully defined below but has not been executed. No code, docs, or tests will be changed until this plan is reviewed and approval is received.
+- [x] Phase 5 — **COMPLETE**: Roo-assisted MCP validation as a development completion gate.
+  - [x] MCP validation gate rule added to [`.roo/rules.md`](.roo/rules.md) with full required content (gate scope, evidence requirements, applies/does-not-apply conditions). ✅
+  - [x] [`docs/DEVELOPER.md`](docs/DEVELOPER.md) updated: completion gate cross-reference added at top of Roo-Assisted MCP Exploratory Validation Loop section, pointing to [`.roo/rules.md`](.roo/rules.md). ✅
+  - [x] This plan updated with Phase 5 completion evidence and checklist marked `[x]`. ✅
 
 ## Orchestrator delivery plan
 

@@ -49,3 +49,30 @@ Run targeted tests:
 pytest tests/agent/connectionpool
 pytest tests/agent/connectionpool/test_connection.py -k constructor
 ```
+
+## MCP Validation Gate (mcp-ssh-gateway)
+
+When working on mcp-ssh-gateway:
+- Treat the running gateway as the system under test.
+- Any task that changes MCP-exposed behavior must include live MCP validation before being marked complete.
+- Use the stateless streamable-http endpoint: `http://localhost:8000/mcp`
+- Start the gateway with: `python3 app.py`
+- MCP tool calls are exploratory/product-surface validation only and do not replace pytest.
+- Stable expectations discovered through MCP validation should become pytest coverage where practical.
+- Capture validation evidence for each MCP validation run: tool called, input used, observed result, relevant logs, pass/fail conclusion, and pytest follow-up.
+- Do not use the gateway as a general-purpose automation substrate unrelated to testing the gateway itself.
+- Supported network transport for this validation loop is stateless streamable-http.
+- Do not add or validate SSE unless explicitly requested in a future slice.
+- Do not rely on stateful MCP sessions for this phase.
+
+Gate applies when a task changes:
+- MCP tool registration, tool names or descriptions, tool input/output shape
+- Connection or pool behavior exposed through tools
+- Command execution behavior
+- Startup or transport behavior
+- Logging or observability needed to interpret MCP tool calls
+
+Gate does not apply to:
+- Pure documentation-only edits unrelated to MCP behavior
+- Internal refactors with no MCP-visible behavior change
+- Tests-only changes unless they alter expected MCP-visible behavior
