@@ -239,7 +239,7 @@ def test_query_pool_uses_get_state():
 # Monitor disabled re-check test (Cleanup 4)
 # ---------------------------------------------------------------------------
 
-def test_monitor_does_not_open_connection_disabled_before_open():
+def test_monitor_rechecks_disabled_connection_before_open():
     """Monitor does NOT call open() when connection is in _disabled_names at re-check."""
     pool = _make_pool_with_fake_connections(["iota"])
     conn = pool.connections[0]

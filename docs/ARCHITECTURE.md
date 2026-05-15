@@ -50,14 +50,11 @@ The orchestrator gets capability, not custody.
 
 This allows tools such as Open WebUI, n8n, OpenClaw, or other MCP clients to reach real systems without becoming the owner of remote credentials or connection mechanics.
 
-### Connection
+### Node
 
-A **node** is the managed identity: a named, configured SSH-reachable execution environment.
-A **connection** is the runtime SSH transport to a node. The two are distinct: a node can be configured without an active connection, and a connection closes without removing the node from the managed set.
+A node is the managed identity: a named, configured SSH-reachable execution environment.
 
-A connection is a trusted operational arm into a remote machine.
-
-A connection is not just an SSH target. It represents a remote environment where commands, scripts, discovery, diagnostics, administration, security testing, or other shell-based work can happen.
+A node is not just an SSH target. It represents a remote environment where commands, scripts, discovery, diagnostics, administration, security testing, or other shell-based work can happen.
 
 The remote environment may provide:
 
@@ -71,6 +68,14 @@ The remote environment may provide:
 - or access to isolated infrastructure.
 
 Configured nodes define the reachable operational world.
+
+### Connection
+
+A connection is the runtime SSH transport/session to a node.
+
+A node can exist in the managed set without an active connection — for example, when a node is disabled or unreachable. A connection can close or break without removing the node from the managed set.
+
+The gateway manages connections internally. External orchestrators interact with nodes through MCP tools, not through connection mechanics directly.
 
 ### Capability Environment
 
@@ -114,8 +119,8 @@ The gateway provides controlled operational primitives over MCP.
 
 The capability surface is expected to grow over time. Examples include:
 
-- listing configured connections,
-- inspecting connection state,
+- listing configured nodes,
+- inspecting node status and connection state,
 - discovering capabilities,
 - querying cached capabilities,
 - running commands,
@@ -167,12 +172,12 @@ The LLM must not receive direct custody of:
 
 - private keys,
 - passwords,
-- target host details beyond what tools expose,
+- node host details beyond what tools expose,
 - or unrestricted network authority.
 
 The gateway owns those responsibilities.
 
-New targets may be onboarded as an operational workflow, but they must become explicit registered connections before they are part of the reachable environment set.
+New nodes may be onboarded as an operational workflow, but they must become explicit registered connections before they are part of the reachable environment set.
 
 Passwordless SSH connectivity is preferred. Long-term password storage must be avoided where possible.
 
