@@ -46,7 +46,7 @@ def run_agent(
     logging.info(f"🔍 Initial connection pool state: {pool.query_pool()}")
 
     # Start MCP loop (blocking)
-    mcp = FastMCP(name="mcp-ssh-gateway", host=host, port=port)
+    mcp = FastMCP(name="mcp-ssh-gateway", host=host, port=port, stateless_http=True, json_response=True)
     settings_host = getattr(getattr(mcp, "settings", None), "host", None)
     settings_port = getattr(getattr(mcp, "settings", None), "port", None)
     settings_log_level = getattr(getattr(mcp, "settings", None), "log_level", None)
