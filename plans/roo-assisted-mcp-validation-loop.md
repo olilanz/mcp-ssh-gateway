@@ -131,11 +131,36 @@ Exit criteria:
 - Stopping the terminal process is understandable and manually recoverable.
 - No orphan/lifecycle-hardening work is introduced unless absolutely required for manual operation.
 
-Transition rule to Phase 3:
+Transition rule to Phase 3A:
 
 - Go only when listener readiness is reproducible across at least one stop/start cycle.
 
-### Phase 3 — Roo connection smoke validation
+### Phase 3A — Roo MCP client validation procedure
+
+Goal:
+
+Teach Roo to validate the streamable-http MCP endpoint correctly, including session establishment, tool discovery, and tool invocation.
+
+Tasks:
+
+- Determine the correct Roo MCP configuration for FastMCP streamable-http.
+- Confirm endpoint target between `http://localhost:8000` and `http://localhost:8000/mcp`.
+- Confirm whether an initialize/session step is required before tool calls.
+- Capture the exact Roo-side configuration that works.
+- Capture and document sequence: connect endpoint -> establish session -> enumerate tools -> invoke `get_status` -> inspect gateway logs.
+- Record common failure modes, including `Session not found`, as setup/protocol errors rather than gateway tool failures.
+
+Exit criteria:
+
+- A documented repeatable Roo MCP client validation procedure exists.
+- Transport/session failures are clearly distinguished from gateway tool failures.
+- `get_status` succeeds once using the documented procedure.
+
+Transition rule to Phase 3B:
+
+- Go only when the Roo-side streamable-http client/session procedure is validated and documented.
+
+### Phase 3B — Roo connection smoke validation
 
 Goal:
 
@@ -158,7 +183,7 @@ Exit criteria:
 
 Transition rule to Phase 4:
 
-- Go only when exploratory observations are stable enough to convert at least one startup/config expectation into pytest scope.
+- Go only when Phase 3A is complete and exploratory observations from Phase 3B are stable enough to convert at least one startup/config expectation into pytest scope.
 
 ### Phase 4 — Regression coverage and documentation
 
@@ -229,8 +254,9 @@ This slice is complete when all are true:
 ## Working slice status checklist
 
 - [x] Phase 1 completed with recorded transport viability findings.
-- [ ] Phase 2 completed with reliable manual startup path.
-- [ ] Phase 3 completed with Roo smoke validation evidence.
+- [x] Phase 2 completed with reliable manual startup path.
+- [ ] Phase 3A completed with documented Roo MCP client validation procedure.
+- [ ] Phase 3B completed with Roo smoke validation evidence.
 - [ ] Phase 4 completed with pytest and documentation updates.
 
 ## Orchestrator delivery plan
@@ -327,7 +353,7 @@ Phase 2 execution notes (actual run):
   - Controlled shutdown observed after timeout, confirming one full start/stop validation cycle.
   - Phase 2 gate result: **PASS** (do not begin Phase 3 until explicitly directed).
 
-### Delivery Step 3 — Execute Phase 3 Roo connection smoke validation
+### Delivery Step 3 — Execute Phase 3B Roo connection smoke validation
 
 Scope:
 
@@ -364,10 +390,11 @@ Observed evidence (2026-05-15 UTC):
   - Repeated `Still waiting for tunnel inbound...`.
   - Reconnect churn including `Connection inbound is down. Attempting to reconnect...` and outbound failures `Error reading SSH protocol banner`.
 
-Phase 3 exit-criteria conclusion:
+Phase 3B exit-criteria conclusion:
 
 - **STOP (not GO)** for Delivery Step 3 completion gate.
 - Reason: connection attempt evidence and invocation evidence were captured once, but MCP tool-call execution was not reproducibly successful due to session-level failure (`Session not found`), satisfying the step's stop condition: endpoint reachable path configured yet tool surfacing/call behavior not reproducible.
+- Classification note: prior `Session not found` evidence indicates a missing or incorrect client protocol/session procedure in Roo setup, not a gateway tool failure.
 
 ### Delivery Step 4 — Execute Phase 4 regression and documentation updates
 
