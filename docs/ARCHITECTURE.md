@@ -4,7 +4,7 @@ This document defines the system model, trust boundary, and architectural invari
 
 `mcp-ssh-gateway` is an MCP-native boundary agent. It gives LLMs and automation systems controlled operational reach into selected remote environments.
 
-SSH is the transport. The product boundary is broader: declared connections, capability discovery, capability cache, execution, logging, and orchestration support through MCP tools.
+SSH is the transport. The product boundary is broader: declared connections, capability discovery, capability cache, execution, logging, and orchestration support through MCP tools. The MCP API surface is node-oriented: nodes are the primary management unit exposed to orchestration systems.
 
 ## System Shape
 
@@ -190,7 +190,11 @@ Current code implements:
 - connection pool lifecycle scaffolding,
 - direct SSH connectivity using Paramiko,
 - reverse tunnel probing through already exposed local ports,
-- and structured command execution results.
+- structured command execution results,
+- node-oriented MCP API surface (`get_status`, `get_node_info`, `add_node`, `remove_node`, `enable_node`, `disable_node`),
+- `NodeRegistry` (in-memory, thread-safe; stores `NodeConfig` and `NodeInfoCache`),
+- `NodeService` (business logic layer over registry and pool; composes `NodeRuntimeState` at call time),
+- and `ConnectionPool` disable/remove/enable seam (`disable_connection`, `enable_connection`, `remove_connection`).
 
 Current code is evolving around:
 

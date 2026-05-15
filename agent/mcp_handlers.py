@@ -1,23 +1,39 @@
 import logging
+from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-def register_tools(mcp: FastMCP):
+def register_tools(mcp: FastMCP, node_service):
 
     @mcp.tool()
-    def get_status(params):
+    def get_status() -> dict:
         logging.debug("get_status called")
-        return {"status": "ok"}
+        return node_service.get_status()
 
-    @mcp.tool("get_device_info")
-    def get_device_info(params):
-        import platform
-        logging.debug("get_device_info called")
-        return {
-            "system": platform.system(),
-            "release": platform.release(),
-            "machine": platform.machine()
-        }
+    @mcp.tool()
+    def get_node_info(name: Optional[str] = None, refresh: bool = False) -> dict:
+        logging.debug(f"get_node_info called: name={name}, refresh={refresh}")
+        return node_service.get_node_info(name=name, refresh=refresh)
+
+    @mcp.tool()
+    def add_node(name: str, host: str, port: int = 22, user: str = "pi", password: str = "", mode: str = "direct") -> dict:
+        logging.debug(f"add_node called: name={name}, host={host}, port={port}, user={user}, mode={mode}")
+        return node_service.add_node(name=name, host=host, port=port, user=user, password=password, mode=mode)
+
+    @mcp.tool()
+    def remove_node(name: str) -> dict:
+        logging.debug(f"remove_node called: name={name}")
+        return node_service.remove_node(name=name)
+
+    @mcp.tool()
+    def enable_node(name: str, validate: bool = False) -> dict:
+        logging.debug(f"enable_node called: name={name}, validate={validate}")
+        return node_service.enable_node(name=name, validate=validate)
+
+    @mcp.tool()
+    def disable_node(name: str) -> dict:
+        logging.debug(f"disable_node called: name={name}")
+        return node_service.disable_node(name=name)
 
     @mcp.tool()
     def run_command(params):
@@ -37,4 +53,3 @@ def register_tools(mcp: FastMCP):
         logging.debug(f"upload_file called for {path} with mode {mode}")
         write_file(path, data_b64, mode)
         return {"status": "written", "path": path}
-

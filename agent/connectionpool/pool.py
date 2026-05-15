@@ -27,11 +27,12 @@ class ConnectionPool:
         self.reconnection_delay = reconnection_delay
         self.connections = []
         self.os_info_cache = {}
-        self.lock = threading.Lock()  # For thread-safe access to os_info_cache
+        self.lock = threading.Lock()  # For thread-safe access to os_info_cache and connections
         self._monitor_lock = threading.Lock()  # To ensure one monitor loop at a time
         self._stopping = threading.Event()  # To signal stop
         self._timer = None
         self._started = False
+        self._disabled_names: set[str] = set()  # Names of connections skipped by the monitor
 
         for config in connection_configs:
             # Accept both legacy dict configs and validated config objects.
@@ -89,11 +90,17 @@ class ConnectionPool:
             if self._stopping.is_set():
                 return
 
-            if not self.connections:
+            with self.lock:
+                connections_snapshot = list(self.connections)
+                disabled_snapshot = set(self._disabled_names)
+
+            if not connections_snapshot:
                 logging.info("🔍 No connections in the pool.")
             else:
                 closed_found = False
-                for connection in self.connections:
+                for connection in connections_snapshot:
+                    if connection.name in disabled_snapshot:
+                        continue  # disabled — do not reconnect
                     if connection.get_state() != ConnectionState.OPEN:
                         closed_found = True
                         logging.warning(f"⚠️ Connection {connection.name} is down. Attempting to reconnect...")
@@ -160,3 +167,45 @@ class ConnectionPool:
 
     def expose_pool_state(self):
         return self.query_pool()
+
+    def disable_connection(self, name: str) -> None:
+        """Close a connection and mark it so the monitor loop will skip it.
+
+        Thread-safe. If *name* is not found, a warning is logged and no
+        exception is raised.
+        """
+        with self.lock:
+            for connection in self.connections:
+                if connection.name == name:
+                    self._disabled_names.add(name)
+                    connection.close()
+                    return
+        logging.warning(f"⚠️ disable_connection: connection '{name}' not found.")
+
+    def enable_connection(self, name: str) -> None:
+        """Clear the disabled mark so the monitor loop manages the connection again.
+
+        Does NOT immediately open the connection. Thread-safe. If *name* is
+        not found, a warning is logged and no exception is raised.
+        """
+        with self.lock:
+            for connection in self.connections:
+                if connection.name == name:
+                    self._disabled_names.discard(name)
+                    return
+        logging.warning(f"⚠️ enable_connection: connection '{name}' not found.")
+
+    def remove_connection(self, name: str) -> None:
+        """Close a connection and remove it from the pool entirely.
+
+        After removal the monitor will never see it again. Thread-safe. If
+        *name* is not found, a warning is logged and no exception is raised.
+        """
+        with self.lock:
+            for connection in self.connections:
+                if connection.name == name:
+                    connection.close()
+                    self.connections.remove(connection)
+                    self._disabled_names.discard(name)
+                    return
+        logging.warning(f"⚠️ remove_connection: connection '{name}' not found.")

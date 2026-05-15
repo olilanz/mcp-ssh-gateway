@@ -42,7 +42,9 @@ The goal is:
 
 ## Standard smoke test
 
-A minimal repeatable smoke test to run after every gateway change:
+A minimal repeatable smoke test to run after every gateway change.
+
+**The standard smoke test is read-only. It must not invoke mutating tools.**
 
 1. Start gateway:
 
@@ -60,9 +62,9 @@ A minimal repeatable smoke test to run after every gateway change:
 
 4. Confirm Roo can see tools.
 
-5. Invoke:
+5. Invoke (read-only):
    - `get_status`
-   - `get_device_info`
+   - `get_node_info`
 
 6. Capture:
    - startup command
@@ -72,6 +74,43 @@ A minimal repeatable smoke test to run after every gateway change:
    - outputs
    - relevant logs
    - pass/fail conclusion
+
+## Task-focused validation for the node management API slice
+
+After the standard smoke test, validate the mutating node tools using safe synthetic test data. These calls are not part of the standard smoke test — they are task-scoped validation for the node management API slice.
+
+**Validate request/response shape only. Use synthetic names, hosts, and users. No real credentials. No real network targets.**
+
+Tools to validate:
+
+```
+add_node      — validate request/response shape; use synthetic name/host/user (no real credentials)
+                expected: {"status": "bootstrap_not_implemented", "name": ..., "reason": ...}
+
+remove_node   — validate against a test node added in the session
+                expected: {"status": "removed", "name": ...}
+
+enable_node   — validate state transition (node enabled → disabled → enabled)
+                expected: {"status": "enabled", "name": ...}
+
+disable_node  — validate state transition (node enabled → disabled)
+                expected: {"status": "disabled", "name": ...}
+```
+
+Example synthetic data for `add_node`:
+
+```json
+{
+  "name": "validation-test-01",
+  "host": "192.168.99.1",
+  "port": 22,
+  "user": "testuser",
+  "password": "synthetic-test-only",
+  "mode": "direct"
+}
+```
+
+**Note on `add_node` current behavior:** bootstrap is not yet implemented. `add_node` returns `bootstrap_not_implemented` and does **not** add the node to the registry. Therefore `disable_node`, `enable_node`, and `remove_node` cannot be tested against a newly added node in this slice. Use any node present in the configured registry instead.
 
 ## Task-focused exploratory validation
 

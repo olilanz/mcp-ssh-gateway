@@ -83,6 +83,37 @@ The gateway may eventually assist onboarding workflows that:
 
 New environments must still become explicit configured connections before they are part of the reachable operational set.
 
+## Assisted Node Onboarding
+
+The `add_node` tool may accept a temporary password to support assisted onboarding workflows.
+
+The intended use of a password in `add_node` is:
+
+1. Use the password only to install the gateway public key on the target node.
+2. Verify that passwordless SSH access succeeds before completing registration.
+3. Discard the password immediately after the bootstrap operation.
+
+Credential safety rules (non-negotiable):
+
+- Passwords must **never** be stored in the registry, configuration, cache, or any file.
+- Passwords must **never** appear in any log statement.
+- Passwords must **never** be echoed or returned in any response value.
+- Passwords must not persist beyond the call frame.
+
+**Current implemented behavior:**
+
+Password-based bootstrap is **not yet implemented** in the current codebase. When `add_node` is called, it returns a `bootstrap_not_implemented` response and does **not** add the node to the registry. No SSH connection is attempted. No key installation occurs.
+
+**Intended future behavior (not yet implemented):**
+
+When bootstrap is implemented, `add_node` will:
+- Use the password transiently to connect and install the gateway public key.
+- Verify passwordless SSH access succeeds.
+- Register the node in the registry only after passwordless access is confirmed.
+- Never store, log, or return the password at any point.
+
+Documentation and tests must not claim bootstrap behavior until it exists in code.
+
 ## Reverse Tunnel Security
 
 Reverse tunnel mode is intended for environments where the gateway cannot directly reach the remote machine.

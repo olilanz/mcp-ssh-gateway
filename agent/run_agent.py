@@ -6,6 +6,9 @@ from agent.connectionpool.config_loader import ConnectionConfigError
 import time
 import os
 from agent import mcp_handlers
+from agent.nodes.models import NodeConfig, NodeInfoCache
+from agent.nodes.registry import NodeRegistry
+from agent.nodes.service import NodeService
 
 def run_agent(
     config_path="connections.json",
@@ -45,12 +48,28 @@ def run_agent(
     pool.start()
     logging.info(f"🔍 Initial connection pool state: {pool.query_pool()}")
 
+    # Seed NodeRegistry from pool connections
+    registry = NodeRegistry()
+    for conn in pool.connections:
+        cfg = NodeConfig(
+            name=conn.name,
+            mode=conn.mode.value,
+            enabled=True,
+            host=conn.host,
+            port=conn.port,
+            user=conn.user,
+            id_file=conn.id_file,
+        )
+        registry.add(cfg)
+
+    node_service = NodeService(registry=registry, pool=pool)
+
     # Start MCP loop (blocking)
     mcp = FastMCP(name="mcp-ssh-gateway", host=host, port=port, stateless_http=True, json_response=True)
     settings_host = getattr(getattr(mcp, "settings", None), "host", None)
     settings_port = getattr(getattr(mcp, "settings", None), "port", None)
     settings_log_level = getattr(getattr(mcp, "settings", None), "log_level", None)
-    mcp_handlers.register_tools(mcp)
+    mcp_handlers.register_tools(mcp, node_service)
     logging.info(
         "Agent registered all handlers. MCP loop initiated "
         f"(transport={transport}, host={host}, port={port})."
