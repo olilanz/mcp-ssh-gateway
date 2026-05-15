@@ -84,6 +84,13 @@ class AgentIdentityService:
         with open(public_key_path, "r") as f:
             public_key = f.read().strip()
 
+        # Validate key type is ed25519
+        if not public_key.startswith("ssh-ed25519 "):
+            raise RuntimeError(
+                f"Existing key at {public_key_path} is not an ed25519 key. "
+                "Agent identity must be ed25519. Remove the existing keypair to regenerate."
+            )
+
         # Get fingerprint
         fingerprint = self._get_fingerprint(public_key_path)
 

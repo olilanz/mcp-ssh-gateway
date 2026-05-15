@@ -134,3 +134,36 @@ def test_inconsistent_keypair_raises(tmp_path):
     service3 = AgentIdentityService(key_dir=str(tmp_path))
     with pytest.raises(RuntimeError, match="fingerprint mismatch"):
         service3.ensure_agent_identity()
+
+
+def test_ensure_does_not_log_private_key_content(tmp_path, caplog):
+    """Private key material must never appear in logs during identity generation."""
+    import logging
+    service = AgentIdentityService(str(tmp_path))
+    with caplog.at_level(logging.DEBUG):
+        identity = service.ensure_agent_identity()
+    # Read the actual private key file content
+    with open(identity.private_key_path) as f:
+        private_key_content = f.read()
+    # Verify no part of the private key appears in any log record
+    for record in caplog.records:
+        assert "-----BEGIN" not in record.message, \
+            "Private key PEM header must not appear in logs"
+        assert private_key_content[:20] not in record.message, \
+            "Private key content must not appear in logs"
+
+
+def test_non_ed25519_public_key_raises(tmp_path):
+    """If an existing public key is not ed25519 type, ensure_agent_identity raises RuntimeError."""
+    import subprocess
+    service = AgentIdentityService(str(tmp_path))
+    private_key = tmp_path / "agent_id_ed25519"
+    public_key = tmp_path / "agent_id_ed25519.pub"
+    # Generate an RSA keypair instead
+    subprocess.run(
+        ["ssh-keygen", "-t", "rsa", "-b", "2048", "-N", "", "-f", str(private_key)],
+        check=True, capture_output=True
+    )
+    # Verify public key starts with ssh-rsa (not ed25519)
+    with pytest.raises(RuntimeError, match="not an ed25519 key"):
+        service.ensure_agent_identity()

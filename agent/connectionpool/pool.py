@@ -15,12 +15,12 @@ from .connection import Connection
 from .connection import ConnectionState
 
 class ConnectionPool:
-    def __init__(self, connection_configs, reconnection_delay=5):
+    def __init__(self, connection_configs, reconnection_delay: float = 5):
         """
         Initialize the connection pool.
 
         :param connection_configs: List of connection configurations.
-        :param reconnection_delay: Delay in seconds between reconnection attempts (default: 5 seconds).
+        :param reconnection_delay: Delay in seconds between reconnection attempts (default: 5 seconds). Accepts float for sub-second values.
 
         Current assumption: configs are static for process lifetime.
         """

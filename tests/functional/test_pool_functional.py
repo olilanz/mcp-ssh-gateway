@@ -36,7 +36,7 @@ def _wait_for_open(pool: ConnectionPool, name: str, timeout: float = 5.0) -> str
 @pytest.fixture
 def pool_and_name(spawn_sshd):
     config = _make_config(spawn_sshd)
-    pool = ConnectionPool([config], reconnection_delay=30)
+    pool = ConnectionPool([config], reconnection_delay=0.2)
     pool.start()
     name = config.name
     try:
@@ -77,8 +77,8 @@ def test_pool_disable_connection_closes_and_prevents_reconnect(pool_and_name):
     state = pool.get_connection_state(name)
     assert state == "closed"
 
-    # Wait one monitor cycle to confirm the monitor doesn't reconnect (pool has reconnection_delay=30s,
-    # but we verify the disabled set prevents reconnect; a brief pause is enough)
-    time.sleep(0.5)
+    # Wait enough time for ~3 monitor cycles (reconnection_delay=0.2s) to confirm
+    # the disabled state survives monitor cycles and the monitor does not reconnect
+    time.sleep(0.6)
     state = pool.get_connection_state(name)
     assert state == "closed", f"Expected 'closed' after disable, got '{state}'"

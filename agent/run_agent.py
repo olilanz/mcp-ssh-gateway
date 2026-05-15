@@ -1,12 +1,10 @@
 import logging
-import threading
 from typing import Literal
 from mcp.server.fastmcp import FastMCP
 from agent.connectionpool.config_loader import ConnectionConfigError
-import time
 import os
 from agent import mcp_handlers
-from agent.nodes.models import NodeConfig, NodeInfoCache
+from agent.nodes.models import NodeConfig
 from agent.nodes.registry import NodeRegistry
 from agent.nodes.service import NodeService
 from agent.identity.service import AgentIdentityService

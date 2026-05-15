@@ -12,11 +12,13 @@ Spawns a dedicated sshd process using:
 """
 import os
 import pwd
+import shutil
 import socket
 import subprocess
 import tempfile
 import time
 from dataclasses import dataclass
+from shutil import which
 import pytest
 
 
@@ -58,37 +60,44 @@ def _wait_for_port(host: str, port: int, timeout: float = 10.0) -> None:
 @pytest.fixture
 def spawn_sshd():
     """Spawn an isolated local sshd process for functional SSH testing."""
+    # Find sshd binary before creating tempdir
+    sshd_bin = which("sshd") or "/usr/sbin/sshd"
+    if not os.path.isfile(sshd_bin):
+        pytest.skip("sshd binary not available")
+
     tempdir = tempfile.mkdtemp(prefix="sshd_fixture_")
-    current_user = pwd.getpwuid(os.getuid()).pw_name
-    port = _find_free_port()
+    process = None
+    try:
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        port = _find_free_port()
 
-    # Generate host key
-    host_key_path = os.path.join(tempdir, "ssh_host_ed25519_key")
-    subprocess.run(
-        ["ssh-keygen", "-t", "ed25519", "-N", "", "-f", host_key_path],
-        check=True, capture_output=True
-    )
+        # Generate host key
+        host_key_path = os.path.join(tempdir, "ssh_host_ed25519_key")
+        subprocess.run(
+            ["ssh-keygen", "-t", "ed25519", "-N", "", "-f", host_key_path],
+            check=True, capture_output=True
+        )
 
-    # Generate throwaway client keypair
-    client_key_path = os.path.join(tempdir, "client_ed25519")
-    subprocess.run(
-        ["ssh-keygen", "-t", "ed25519", "-N", "", "-f", client_key_path],
-        check=True, capture_output=True
-    )
+        # Generate throwaway client keypair
+        client_key_path = os.path.join(tempdir, "client_ed25519")
+        subprocess.run(
+            ["ssh-keygen", "-t", "ed25519", "-N", "", "-f", client_key_path],
+            check=True, capture_output=True
+        )
 
-    # Set up authorized_keys with absolute path
-    authorized_keys_path = os.path.join(tempdir, "authorized_keys")
-    with open(client_key_path + ".pub") as f:
-        pub_key = f.read().strip()
-    with open(authorized_keys_path, "w") as f:
-        f.write(pub_key + "\n")
-    os.chmod(authorized_keys_path, 0o600)
-    os.chmod(client_key_path, 0o600)
+        # Set up authorized_keys with absolute path
+        authorized_keys_path = os.path.join(tempdir, "authorized_keys")
+        with open(client_key_path + ".pub") as f:
+            pub_key = f.read().strip()
+        with open(authorized_keys_path, "w") as f:
+            f.write(pub_key + "\n")
+        os.chmod(authorized_keys_path, 0o600)
+        os.chmod(client_key_path, 0o600)
 
-    # Write sshd_config
-    sshd_config_path = os.path.join(tempdir, "sshd_config")
-    with open(sshd_config_path, "w") as f:
-        f.write(f"""Port {port}
+        # Write sshd_config
+        sshd_config_path = os.path.join(tempdir, "sshd_config")
+        with open(sshd_config_path, "w") as f:
+            f.write(f"""Port {port}
 ListenAddress 127.0.0.1
 HostKey {host_key_path}
 AuthorizedKeysFile {authorized_keys_path}
@@ -103,54 +112,49 @@ UsePAM no
 ChallengeResponseAuthentication no
 """)
 
-    # Find sshd binary
-    sshd_bin = None
-    for candidate in ["/usr/sbin/sshd", "/sbin/sshd", "sshd"]:
+        log_path = os.path.join(tempdir, "sshd.log")
+
+        # Start sshd in foreground (-D) with our config
+        process = subprocess.Popen(
+            [sshd_bin, "-D", "-f", sshd_config_path, "-E", log_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
         try:
-            result = subprocess.run(["which", candidate] if candidate == "sshd" else ["test", "-x", candidate],
-                                    capture_output=True)
-            if result.returncode == 0:
-                sshd_bin = candidate
-                break
-        except Exception:
-            continue
-    if sshd_bin is None:
-        sshd_bin = "/usr/sbin/sshd"  # fallback
+            _wait_for_port("127.0.0.1", port)
+        except TimeoutError:
+            process.terminate()
+            process.wait()
+            process = None
+            # Try to read log for diagnostics
+            try:
+                with open(log_path) as lf:
+                    log_content = lf.read()
+            except Exception:
+                log_content = "(no log)"
+            raise RuntimeError(f"sshd failed to start on port {port}. Log:\n{log_content}")
 
-    log_path = os.path.join(tempdir, "sshd.log")
+        sshd = SpawnedSSHD(
+            host="127.0.0.1",
+            port=port,
+            user=current_user,
+            client_key_path=client_key_path,
+            process=process,
+            tempdir=tempdir,
+        )
 
-    # Start sshd in foreground (-D) with our config
-    process = subprocess.Popen(
-        [sshd_bin, "-D", "-f", sshd_config_path, "-E", log_path],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+        yield sshd
 
-    try:
-        _wait_for_port("127.0.0.1", port)
-    except TimeoutError:
-        process.terminate()
-        process.wait()
-        # Try to read log for diagnostics
-        try:
-            with open(log_path) as lf:
-                log_content = lf.read()
-        except Exception:
-            log_content = "(no log)"
-        raise RuntimeError(f"sshd failed to start on port {port}. Log:\n{log_content}")
+        sshd.stop()
+        process = None
 
-    sshd = SpawnedSSHD(
-        host="127.0.0.1",
-        port=port,
-        user=current_user,
-        client_key_path=client_key_path,
-        process=process,
-        tempdir=tempdir,
-    )
-
-    yield sshd
-
-    sshd.stop()
-    # Clean up tempdir
-    import shutil
-    shutil.rmtree(tempdir, ignore_errors=True)
+    finally:
+        if process is not None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        shutil.rmtree(tempdir, ignore_errors=True)

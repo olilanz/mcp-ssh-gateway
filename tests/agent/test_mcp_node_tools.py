@@ -202,8 +202,7 @@ def test_disable_node_delegates_to_service():
 # ---------------------------------------------------------------------------
 
 def test_register_tools_signature_accepts_node_service():
-    """register_tools(mcp, node_service) must not raise — validates backward-compat 2-arg call."""
+    """register_tools(mcp, node_service, agent_identity_service) must not raise."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
-    # Must not raise TypeError or any other exception (agent_identity_service defaults to None)
-    mcp_handlers.register_tools(mcp, svc)
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())

@@ -20,7 +20,7 @@ def test_sshd_fixture_starts_and_stops(spawn_sshd):
 
 @pytest.mark.functional
 @pytest.mark.requires_sshd
-def test_sshd_fixture_listens_on_localhost_only(spawn_sshd):
+def test_sshd_fixture_listens_on_localhost(spawn_sshd):
     """sshd port is open on 127.0.0.1."""
     with socket.create_connection(("127.0.0.1", spawn_sshd.port), timeout=2):
         pass

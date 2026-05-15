@@ -3,7 +3,7 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-def register_tools(mcp: FastMCP, node_service, agent_identity_service=None):
+def register_tools(mcp: FastMCP, node_service, agent_identity_service):
 
     @mcp.tool()
     def get_node_status() -> dict:
