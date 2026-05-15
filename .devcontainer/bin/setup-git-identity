@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Persist git identity in a named Docker volume mounted at /opt/shared-git-identity
+# Persist git identity in a named Docker volume mounted at /opt/shared-git-identity.
+# Symlinks /home/vscode/.gitconfig → /opt/shared-git-identity/.gitconfig.
+# Idempotent: safe to call on every container start.
+
 install -d -m 0755 /opt/shared-git-identity
 touch /opt/shared-git-identity/.gitconfig
 chmod 600 /opt/shared-git-identity/.gitconfig

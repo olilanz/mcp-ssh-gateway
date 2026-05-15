@@ -16,16 +16,7 @@ RUN apt-get update && \
     && apt-get remove -y python3-jwt \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root vscode user for devcontainer sessions
-RUN groupadd --gid 1000 vscode \
-    && useradd --uid 1000 --gid 1000 -m -s /bin/bash vscode
-
-WORKDIR /app
-COPY pyproject.toml /app/pyproject.toml
-COPY agent /app/agent
-COPY app.py /app/app.py
-RUN pip install --no-cache-dir --break-system-packages .
-
+    
 # Configure SSH daemon during build
 #RUN mkdir -p /etc/ssh && \
 #    echo "Port ${SSH_LISTEN_PORT}" > /etc/ssh/sshd_config && \
@@ -41,20 +32,19 @@ RUN pip install --no-cache-dir --break-system-packages .
 #    echo "PermitOpen any" >> /etc/ssh/sshd_config && \
 #    echo "AuthorizedKeysFile /etc/ssh/authorized_keys" >> /etc/ssh/sshd_config
 
-# environment setup
+WORKDIR /app
+COPY pyproject.toml /app/pyproject.toml
+COPY agent /app/agent
+COPY app.py /app/app.py
+RUN pip install --no-cache-dir --break-system-packages .
+
 EXPOSE ${MCP_PORT}
 EXPOSE ${SSH_LISTEN_PORT}
 
-# startup script
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-# helper scripts
 COPY scripts /app/scripts
 RUN chmod +x /app/scripts/*.sh
 
-# Allow vscode user to own and manage /app during postCreateCommand symlink step
-RUN chown -R vscode:vscode /app
-
-# Default entrypoint
 ENTRYPOINT ["/app/entrypoint.sh"]
