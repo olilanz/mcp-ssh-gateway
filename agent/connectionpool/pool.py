@@ -104,6 +104,10 @@ class ConnectionPool:
                     if connection.get_state() != ConnectionState.OPEN:
                         closed_found = True
                         logging.warning(f"⚠️ Connection {connection.name} is down. Attempting to reconnect...")
+                        # Re-check under lock before reconnecting (race: disable_node may have fired)
+                        with self.lock:
+                            if connection.name in self._disabled_names:
+                                continue
                         try:
                             connection.open()
                             self.gather_os_info(connection)
@@ -146,12 +150,25 @@ class ConnectionPool:
             for connection in self.connections:
                 state = {
                     "name": connection.name,
-                    "is_running": connection.is_running(),
-                    "os_info": self.os_info_cache.get(connection.name, "No OS info cached"),
-                    "connection_state": connection.get_connection_state()
+                    "state": connection.get_state().value,
+                    "os_info": self.os_info_cache.get(connection.name, None),
                 }
                 pool_state.append(state)
             return pool_state
+
+    def get_connection_state(self, name: str) -> str:
+        """Return the current state string for a named connection.
+
+        Returns one of: "open", "closed", "opening", "broken", "not_in_pool".
+        Does not perform live SSH probing.
+        Thread-safe.
+        """
+        with self.lock:
+            for conn in self.connections:
+                if conn.name == name:
+                    state = conn.get_state()
+                    return state.value  # ConnectionState enum → string
+            return "not_in_pool"
 
     def send_command(self, connection_name, command):
         with self.lock:

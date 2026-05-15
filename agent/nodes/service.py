@@ -8,25 +8,17 @@ Semantic model:
 
 NodeService composes NodeRuntimeState at call time from two live sources:
   1. Registry: NodeConfig + NodeInfoCache (identity, config, cached facts)
-  2. Pool: current ConnectionState queried from pool.connections at call time
+  2. Pool: current ConnectionState queried via pool.get_connection_state() at call time
 
 NodeRuntimeState is assembled inline and NEVER stored in the registry.
 The pool_state field is always freshly derived from the pool at call time.
 """
 
+from dataclasses import replace
 from typing import Optional
 
-from agent.connectionpool.connection import ConnectionState
 from agent.connectionpool.pool import ConnectionPool
 from agent.nodes.registry import NodeRegistry
-
-
-_STATE_MAP = {
-    ConnectionState.OPEN: "open",
-    ConnectionState.CLOSED: "closed",
-    ConnectionState.OPENING: "opening",
-    ConnectionState.BROKEN: "broken",
-}
 
 
 class NodeService:
@@ -37,7 +29,7 @@ class NodeService:
     Never copies or caches pool runtime state into the registry.
 
     Phase 3 implements read-only methods only:
-      - get_status()
+      - get_node_status()
       - get_node_info(name, refresh)
 
     Phase 4 adds mutation methods:
@@ -56,19 +48,16 @@ class NodeService:
     # ------------------------------------------------------------------
 
     def _derive_pool_state(self, name: str) -> str:
-        """Query pool.connections at call time and map to a pool_state string.
+        """Query pool at call time and return a pool_state string.
 
         Returns one of: "open", "closed", "opening", "broken", "not_in_pool".
         This is always freshly computed — never read from the registry.
+        Delegates to pool.get_connection_state(name); does not access pool internals directly.
         """
-        for conn in self._pool.connections:
-            if conn.name == name:
-                state = conn.get_state()
-                return _STATE_MAP.get(state, "closed")
-        return "not_in_pool"
+        return self._pool.get_connection_state(name)
 
     def _node_entry_for_status(self, config, cache) -> dict:
-        """Assemble one node entry for get_status() response.
+        """Assemble one node entry for get_node_status() response.
 
         Reads config + cache from registry arguments; derives pool_state live.
         """
@@ -108,11 +97,11 @@ class NodeService:
     # Read APIs (Phase 3)
     # ------------------------------------------------------------------
 
-    def get_status(self) -> dict:
+    def get_node_status(self) -> dict:
         """Return gateway status and all configured nodes with live pool state.
 
         Reads node config and cache from the registry.
-        Derives pool_state at call time by inspecting pool.connections.
+        Derives pool_state at call time via pool.get_connection_state().
         Never copies or caches pool runtime state into the registry.
 
         Returns:
@@ -174,16 +163,7 @@ class NodeService:
             return {"error": "node not found", "name": name}
 
         existing_cfg, _ = self._registry.get(name)
-        from agent.nodes.models import NodeConfig
-        updated_cfg = NodeConfig(
-            name=existing_cfg.name,
-            mode=existing_cfg.mode,
-            enabled=False,
-            host=existing_cfg.host,
-            port=existing_cfg.port,
-            user=existing_cfg.user,
-            id_file=existing_cfg.id_file,
-        )
+        updated_cfg = replace(existing_cfg, enabled=False)
         self._registry.update_config(name, updated_cfg)
         self._pool.disable_connection(name)
         return {"status": "disabled", "name": name}
@@ -207,16 +187,7 @@ class NodeService:
             return {"error": "node not found", "name": name}
 
         existing_cfg, _ = self._registry.get(name)
-        from agent.nodes.models import NodeConfig
-        updated_cfg = NodeConfig(
-            name=existing_cfg.name,
-            mode=existing_cfg.mode,
-            enabled=True,
-            host=existing_cfg.host,
-            port=existing_cfg.port,
-            user=existing_cfg.user,
-            id_file=existing_cfg.id_file,
-        )
+        updated_cfg = replace(existing_cfg, enabled=True)
         self._registry.update_config(name, updated_cfg)
         self._pool.enable_connection(name)
 

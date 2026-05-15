@@ -4,7 +4,7 @@ Unit tests for NodeRegistry (Phase 1) and NodeService read APIs (Phase 3).
 Registry stores (NodeConfig, NodeInfoCache) 2-tuples only.
 NodeRuntimeState is a computed DTO and is never stored in NodeRegistry.
 
-Phase 3 adds NodeService.get_status() and NodeService.get_node_info() tests.
+Phase 3 adds NodeService.get_node_status() and NodeService.get_node_info() tests.
 All NodeService tests use a real NodeRegistry and a mocked ConnectionPool.
 No live SSH is performed in any of these tests.
 """
@@ -219,7 +219,6 @@ def test_thread_safety_concurrent_adds():
 
 def make_mock_connection(name, state):
     from unittest.mock import MagicMock
-    from agent.connectionpool.connection import ConnectionState
     conn = MagicMock()
     conn.name = name
     conn.get_state.return_value = state
@@ -227,9 +226,31 @@ def make_mock_connection(name, state):
 
 
 def make_mock_pool(connections=None):
+    """Build a mock pool whose get_connection_state() delegates to mock connections.
+
+    NodeService calls pool.get_connection_state(name) — never pool.connections directly.
+    """
     from unittest.mock import MagicMock
+    from agent.connectionpool.connection import ConnectionState
+
     pool = MagicMock()
-    pool.connections = connections or []
+    conns = connections or []
+
+    _STATE_MAP = {
+        ConnectionState.OPEN: "open",
+        ConnectionState.CLOSED: "closed",
+        ConnectionState.OPENING: "opening",
+        ConnectionState.BROKEN: "broken",
+    }
+
+    def get_connection_state(name):
+        for conn in conns:
+            if conn.name == name:
+                state = conn.get_state()
+                return _STATE_MAP.get(state, "closed")
+        return "not_in_pool"
+
+    pool.get_connection_state.side_effect = get_connection_state
     return pool
 
 
@@ -261,20 +282,20 @@ def make_service(nodes=None, pool_connections=None):
 
 
 # ---------------------------------------------------------------------------
-# NodeService — get_status() tests
+# NodeService — get_node_status() tests
 # ---------------------------------------------------------------------------
 
 
-def test_get_status_empty_registry():
+def test_get_node_status_empty_registry():
     """Empty registry returns {"status": "ok", "nodes": []}."""
     registry = NodeRegistry()
     pool = make_mock_pool()
     svc = NodeService(registry=registry, pool=pool)
-    result = svc.get_status()
+    result = svc.get_node_status()
     assert result == {"status": "ok", "nodes": []}
 
 
-def test_get_status_includes_required_fields():
+def test_get_node_status_includes_required_fields():
     """Each node entry must have all required fields."""
     from agent.connectionpool.connection import ConnectionState
 
@@ -282,62 +303,61 @@ def test_get_status_includes_required_fields():
                 "last_seen_at", "last_error", "cached_info_available"}
     conn = make_mock_connection("lab-pi-01", ConnectionState.OPEN)
     svc = make_service(pool_connections=[conn])
-    result = svc.get_status()
+    result = svc.get_node_status()
 
     assert len(result["nodes"]) == 1
     assert required.issubset(set(result["nodes"][0].keys()))
 
 
-def test_get_status_pool_state_open():
+def test_get_node_status_pool_state_open():
     """Node with matching open pool connection shows pool_state='open', reachable=True."""
     from agent.connectionpool.connection import ConnectionState
 
     conn = make_mock_connection("lab-pi-01", ConnectionState.OPEN)
     svc = make_service(pool_connections=[conn])
-    result = svc.get_status()
+    result = svc.get_node_status()
 
     node = result["nodes"][0]
     assert node["pool_state"] == "open"
     assert node["reachable"] is True
 
 
-def test_get_status_pool_state_not_in_pool():
+def test_get_node_status_pool_state_not_in_pool():
     """Node with no matching pool connection shows pool_state='not_in_pool', reachable=False."""
     svc = make_service(pool_connections=[])
-    result = svc.get_status()
+    result = svc.get_node_status()
 
     node = result["nodes"][0]
     assert node["pool_state"] == "not_in_pool"
     assert node["reachable"] is False
 
 
-def test_get_status_pool_state_derived_at_call_time():
+def test_get_node_status_pool_state_derived_at_call_time():
     """Pool state is read from mock connection at call time, not from any registry value."""
-    from unittest.mock import MagicMock
     from agent.connectionpool.connection import ConnectionState
 
     conn = make_mock_connection("lab-pi-01", ConnectionState.CLOSED)
     svc = make_service(pool_connections=[conn])
 
     # First call — closed
-    result1 = svc.get_status()
+    result1 = svc.get_node_status()
     assert result1["nodes"][0]["pool_state"] == "closed"
 
     # Mutate mock state to OPEN — next call must reflect the new value
     conn.get_state.return_value = ConnectionState.OPEN
-    result2 = svc.get_status()
+    result2 = svc.get_node_status()
     assert result2["nodes"][0]["pool_state"] == "open"
     assert result2["nodes"][0]["reachable"] is True
 
 
-def test_get_status_cached_info_available_false():
+def test_get_node_status_cached_info_available_false():
     """Node with empty cache shows cached_info_available=False."""
     svc = make_service()
-    result = svc.get_status()
+    result = svc.get_node_status()
     assert result["nodes"][0]["cached_info_available"] is False
 
 
-def test_get_status_cached_info_available_true():
+def test_get_node_status_cached_info_available_true():
     """Node with non-empty cache shows cached_info_available=True."""
     registry = NodeRegistry()
     cfg = NodeConfig(name="lab-pi-01", mode="direct", enabled=True,
@@ -349,8 +369,22 @@ def test_get_status_cached_info_available_true():
     ))
     pool = make_mock_pool()
     svc = NodeService(registry=registry, pool=pool)
-    result = svc.get_status()
+    result = svc.get_node_status()
     assert result["nodes"][0]["cached_info_available"] is True
+
+def test_get_node_status_uses_pool_get_connection_state():
+    """NodeService calls pool.get_connection_state(name) — never pool.connections directly."""
+    from agent.connectionpool.connection import ConnectionState
+
+    conn = make_mock_connection("lab-pi-01", ConnectionState.OPEN)
+    pool = make_mock_pool(connections=[conn])
+    registry = NodeRegistry()
+    cfg = NodeConfig(name="lab-pi-01", mode="direct", enabled=True,
+                     host="192.168.1.10", port=22, user="pi", id_file=None)
+    registry.add(cfg)
+    svc = NodeService(registry=registry, pool=pool)
+    svc.get_node_status()
+    pool.get_connection_state.assert_called_with("lab-pi-01")
 
 
 # ---------------------------------------------------------------------------
@@ -466,10 +500,10 @@ def test_get_node_info_info_contains_cache_facts():
 
 
 def test_disable_node_sets_enabled_false():
-    """After disable_node, get_status shows enabled=False for that node."""
+    """After disable_node, get_node_status shows enabled=False for that node."""
     svc = make_service(nodes=[("lab-pi-01", "direct", True)])
     svc.disable_node("lab-pi-01")
-    result = svc.get_status()
+    result = svc.get_node_status()
     node = result["nodes"][0]
     assert node["name"] == "lab-pi-01"
     assert node["enabled"] is False
@@ -486,10 +520,10 @@ def test_disable_node_calls_pool_disable():
 
 
 def test_disable_node_node_still_visible_in_status():
-    """Disabled node still appears in get_status result."""
+    """Disabled node still appears in get_node_status result."""
     svc = make_service(nodes=[("lab-pi-01", "direct", True)])
     svc.disable_node("lab-pi-01")
-    result = svc.get_status()
+    result = svc.get_node_status()
     names = [n["name"] for n in result["nodes"]]
     assert "lab-pi-01" in names
 
@@ -507,10 +541,10 @@ def test_disable_node_unknown_returns_error():
 
 
 def test_enable_node_sets_enabled_true():
-    """After enable_node, get_status shows enabled=True for that node."""
+    """After enable_node, get_node_status shows enabled=True for that node."""
     svc = make_service(nodes=[("lab-pi-01", "direct", False)])
     svc.enable_node("lab-pi-01")
-    result = svc.get_status()
+    result = svc.get_node_status()
     node = result["nodes"][0]
     assert node["name"] == "lab-pi-01"
     assert node["enabled"] is True
@@ -549,10 +583,10 @@ def test_enable_node_validate_true_stubbed():
 
 
 def test_remove_node_removes_from_status():
-    """After remove_node, node is absent from get_status."""
+    """After remove_node, node is absent from get_node_status."""
     svc = make_service(nodes=[("lab-pi-01", "direct", True)])
     svc.remove_node("lab-pi-01")
-    result = svc.get_status()
+    result = svc.get_node_status()
     names = [n["name"] for n in result["nodes"]]
     assert "lab-pi-01" not in names
 

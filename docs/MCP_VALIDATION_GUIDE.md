@@ -63,7 +63,7 @@ A minimal repeatable smoke test to run after every gateway change.
 4. Confirm Roo can see tools.
 
 5. Invoke (read-only):
-   - `get_status`
+   - `get_node_status`
    - `get_node_info`
 
 6. Capture:

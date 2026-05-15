@@ -6,9 +6,9 @@ from mcp.server.fastmcp import FastMCP
 def register_tools(mcp: FastMCP, node_service):
 
     @mcp.tool()
-    def get_status() -> dict:
-        logging.debug("get_status called")
-        return node_service.get_status()
+    def get_node_status() -> dict:
+        logging.debug("get_node_status called")
+        return node_service.get_node_status()
 
     @mcp.tool()
     def get_node_info(name: Optional[str] = None, refresh: bool = False) -> dict:
@@ -35,6 +35,11 @@ def register_tools(mcp: FastMCP, node_service):
         logging.debug(f"disable_node called: name={name}")
         return node_service.disable_node(name=name)
 
+    # Legacy local execution primitives.
+    # These tools operate on the gateway host, not on a named node.
+    # They do not participate in the node-oriented API surface.
+    # Future node execution will use node-scoped tools (e.g. run_command_on_node).
+    # TODO: replace with node-oriented execution tools in a future slice.
     @mcp.tool()
     def run_command(params):
         import subprocess

@@ -29,7 +29,7 @@ def make_test_mcp():
 def make_mock_node_service():
     """Return a MagicMock standing in for NodeService with plausible return values."""
     svc = MagicMock()
-    svc.get_status.return_value = {"status": "ok", "nodes": []}
+    svc.get_node_status.return_value = {"status": "ok", "nodes": []}
     svc.get_node_info.return_value = {"nodes": []}
     svc.add_node.return_value = {"status": "bootstrap_not_implemented", "name": "test", "reason": "..."}
     svc.remove_node.return_value = {"status": "removed", "name": "test"}
@@ -62,7 +62,7 @@ def test_tool_registration_includes_all_six_node_tools():
     mcp_handlers.register_tools(mcp, svc)
 
     names = _tool_names(mcp)
-    for expected in ["get_status", "get_node_info", "add_node", "remove_node", "enable_node", "disable_node"]:
+    for expected in ["get_node_status", "get_node_info", "add_node", "remove_node", "enable_node", "disable_node"]:
         assert expected in names, f"Expected tool '{expected}' to be registered, got: {names}"
 
 
@@ -75,6 +75,18 @@ def test_get_device_info_not_registered():
     names = _tool_names(mcp)
     assert "get_device_info" not in names, (
         "get_device_info must be absent — it uses prohibited 'device' noun and is retired"
+    )
+
+
+def test_get_status_not_registered():
+    """get_status must NOT be registered (renamed to get_node_status in this slice)."""
+    mcp = make_test_mcp()
+    svc = make_mock_node_service()
+    mcp_handlers.register_tools(mcp, svc)
+
+    names = _tool_names(mcp)
+    assert "get_status" not in names, (
+        "get_status must be absent — it has been renamed to get_node_status"
     )
 
 
@@ -100,16 +112,16 @@ def test_upload_file_still_registered():
 # Delegation tests
 # ---------------------------------------------------------------------------
 
-def test_get_status_delegates_to_service():
-    """get_status handler must delegate to node_service.get_status() and return its result."""
+def test_get_node_status_delegates_to_service():
+    """get_node_status handler must delegate to node_service.get_node_status() and return its result."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
     mcp_handlers.register_tools(mcp, svc)
 
-    fn = _get_tool_fn(mcp, "get_status")
+    fn = _get_tool_fn(mcp, "get_node_status")
     result = fn()
 
-    svc.get_status.assert_called_once_with()
+    svc.get_node_status.assert_called_once_with()
     assert result == {"status": "ok", "nodes": []}
 
 

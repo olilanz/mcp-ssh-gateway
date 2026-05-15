@@ -190,3 +190,65 @@ def test_monitor_reopens_enabled_connection():
         pool._monitor_once()
 
     conn.open.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# get_connection_state tests (Cleanup 2)
+# ---------------------------------------------------------------------------
+
+def test_get_connection_state_open():
+    """Pool with a mock open connection returns 'open'."""
+    pool = _make_pool_with_fake_connections(["alpha"])
+    pool.connections[0].get_state.return_value = ConnectionState.OPEN
+    assert pool.get_connection_state("alpha") == "open"
+
+
+def test_get_connection_state_not_in_pool():
+    """Pool without matching name returns 'not_in_pool'."""
+    pool = _make_pool_with_fake_connections([])
+    assert pool.get_connection_state("nonexistent") == "not_in_pool"
+
+
+def test_get_connection_state_broken():
+    """Pool with a broken connection returns 'broken'."""
+    pool = _make_pool_with_fake_connections(["zeta"])
+    pool.connections[0].get_state.return_value = ConnectionState.BROKEN
+    assert pool.get_connection_state("zeta") == "broken"
+
+
+# ---------------------------------------------------------------------------
+# query_pool tests (Cleanup 3)
+# ---------------------------------------------------------------------------
+
+def test_query_pool_uses_get_state():
+    """query_pool returns list with 'state' key using get_state().value — no AttributeError."""
+    pool = _make_pool_with_fake_connections(["theta"])
+    pool.connections[0].get_state.return_value = ConnectionState.OPEN
+
+    result = pool.query_pool()
+
+    assert len(result) == 1
+    assert result[0]["name"] == "theta"
+    assert result[0]["state"] == "open"
+    # Confirm the old broken keys are absent
+    assert "is_running" not in result[0]
+    assert "connection_state" not in result[0]
+
+
+# ---------------------------------------------------------------------------
+# Monitor disabled re-check test (Cleanup 4)
+# ---------------------------------------------------------------------------
+
+def test_monitor_does_not_open_connection_disabled_before_open():
+    """Monitor does NOT call open() when connection is in _disabled_names at re-check."""
+    pool = _make_pool_with_fake_connections(["iota"])
+    conn = pool.connections[0]
+    conn.get_state.return_value = ConnectionState.CLOSED
+
+    # Connection is already disabled before the monitor runs (covers the re-check path)
+    pool._disabled_names.add("iota")
+
+    with patch.object(pool, "_schedule_monitor"):
+        pool._monitor_once()
+
+    conn.open.assert_not_called()

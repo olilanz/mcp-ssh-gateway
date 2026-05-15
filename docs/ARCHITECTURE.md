@@ -38,7 +38,7 @@ The gateway owns the operational boundary.
 
 It owns:
 
-- configured connections,
+- configured nodes,
 - SSH identities,
 - connection modes,
 - discovery execution,
@@ -51,6 +51,9 @@ The orchestrator gets capability, not custody.
 This allows tools such as Open WebUI, n8n, OpenClaw, or other MCP clients to reach real systems without becoming the owner of remote credentials or connection mechanics.
 
 ### Connection
+
+A **node** is the managed identity: a named, configured SSH-reachable execution environment.
+A **connection** is the runtime SSH transport to a node. The two are distinct: a node can be configured without an active connection, and a connection closes without removing the node from the managed set.
 
 A connection is a trusted operational arm into a remote machine.
 
@@ -67,7 +70,7 @@ The remote environment may provide:
 - network adjacency,
 - or access to isolated infrastructure.
 
-Configured connections define the reachable operational world.
+Configured nodes define the reachable operational world.
 
 ### Capability Environment
 
@@ -93,7 +96,7 @@ Capabilities may include:
 
 ### Capability Cache
 
-Discovered capabilities must be stored per connection.
+Discovered capabilities must be stored per node.
 
 The cache gives the LLM a current view of available execution environments without rediscovering everything for every task.
 
@@ -191,7 +194,7 @@ Current code implements:
 - direct SSH connectivity using Paramiko,
 - reverse tunnel probing through already exposed local ports,
 - structured command execution results,
-- node-oriented MCP API surface (`get_status`, `get_node_info`, `add_node`, `remove_node`, `enable_node`, `disable_node`),
+- node-oriented MCP API surface (`get_node_status`, `get_node_info`, `add_node`, `remove_node`, `enable_node`, `disable_node`),
 - `NodeRegistry` (in-memory, thread-safe; stores `NodeConfig` and `NodeInfoCache`),
 - `NodeService` (business logic layer over registry and pool; composes `NodeRuntimeState` at call time),
 - and `ConnectionPool` disable/remove/enable seam (`disable_connection`, `enable_connection`, `remove_connection`).
@@ -218,7 +221,7 @@ Tests and documentation must not claim reverse tunnel listener behavior until it
 - The public connection boundary must remain the `Connection` facade unless an architecture change explicitly replaces it.
 - Documentation must distinguish implemented behavior from intended architecture.
 - MCP clients must interact through exposed tools, not by taking custody of connection secrets.
-- Configured connections define the reachable operational world.
-- Capability discovery must be represented as per-connection knowledge.
+- Configured nodes define the reachable operational world.
+- Capability discovery must be represented as per-node knowledge.
 - Execution must remain attributable through logs or history.
 - Boundary changes must update docs and tests together.
