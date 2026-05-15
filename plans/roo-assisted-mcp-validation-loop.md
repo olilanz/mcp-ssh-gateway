@@ -257,7 +257,8 @@ This slice is complete when all are true:
 - [x] Phase 2 completed with reliable manual startup path.
 - [x] Phase 3A completed with documented Roo MCP client validation procedure.
 - [x] Phase 3B completed with Roo smoke validation evidence.
-- [ ] Phase 4 completed with pytest and documentation updates.
+- [x] Phase 4 completed with pytest and documentation updates.
+- [ ] Phase 5 defined: Roo-assisted MCP validation as a development completion gate.
 
 ## Orchestrator delivery plan
 
@@ -709,17 +710,19 @@ Scope:
 
 - Convert stable startup/config findings into focused pytest coverage.
 - Add one concise process section in `docs/DEVELOPER.md`.
+- Add ADR for the stateless streamable-http decision.
 
 Expected file changes in this step:
 
-- `tests/integration/test_app_stdio.py` and or other focused startup tests where appropriate
-- `docs/DEVELOPER.md`
+- `tests/agent/test_run_agent_wiring.py` — focused wiring/default behavior tests
+- `docs/DEVELOPER.md` — updated Roo-assisted validation loop section
+- `docs/adr-stateless-streamable-http.md` — new ADR file
 - `plans/roo-assisted-mcp-validation-loop.md` status updates
 
 Validation commands:
 
 ```bash
-pytest tests/integration/test_app_stdio.py
+pytest tests/agent/test_run_agent_wiring.py -v
 pytest
 ```
 
@@ -727,6 +730,86 @@ Stop/Go criteria:
 
 - Go to completion when targeted tests pass and docs capture the process boundary.
 - Stop if proposed test coverage cannot be tied to stable observed behavior.
+
+Phase 4 execution notes (actual run):
+
+- `docs/DEVELOPER.md` updated: Roo-assisted MCP Exploratory Validation Loop section replaced with full stateless streamable-http dev loop documentation including startup command (`python3 app.py`), Roo endpoint (`http://localhost:8000/mcp`), transport scope (streamable-http only; SSE and stateful sessions out of scope), validation loop steps, evidence requirements, Architect/Orchestrator responsibilities.
+- `docs/adr-stateless-streamable-http.md` created: ADR recording the decision to use stateless streamable-http (`stateless_http=True`, `json_response=True`) for the dev validation loop, rationale (restart-resilient, no session-staleness), trade-offs (no session continuity), and deferred work (stateful sessions may be revisited).
+- `tests/agent/test_run_agent_wiring.py` created: four focused wiring tests:
+  - `test_run_agent_constructs_fastmcp_with_stateless_http` — verifies `stateless_http=True` and `json_response=True` in FastMCP constructor kwargs.
+  - `test_run_agent_passes_host_and_port_to_fastmcp` — verifies host/port forwarding.
+  - `test_run_agent_calls_mcp_run_with_transport` — verifies `mcp.run(transport=...)` uses the passed transport argument.
+  - `test_app_py_default_transport_is_streamable_http` — verifies app.py parser defaults to `streamable-http`, `0.0.0.0`, `8000`.
+- No Roo integration testing encoded as regression. No exploratory MCP tool-call behavior captured as pytest.
+
+### Phase 5 — Roo-assisted MCP validation as a development completion gate
+
+Goal:
+
+Establish Roo-assisted MCP validation as a required development completion gate for future slices that change MCP-exposed behavior.
+
+Rationale:
+
+The purpose of this slice is not only to prove that Roo can connect to the gateway once. The goal is to make live MCP validation a strong development pillar. Roo must validate changed MCP behavior through the running gateway before marking relevant tasks complete.
+
+#### Gate applies when a task changes
+
+- MCP tool registration
+- tool names
+- tool descriptions
+- tool input shape
+- tool output shape
+- connection or pool behavior exposed through tools
+- command execution behavior
+- startup or transport behavior
+- logging or observability needed to interpret MCP tool calls
+
+#### Gate does not apply to
+
+- pure documentation edits unrelated to MCP behavior
+- internal refactors with no MCP-visible behavior change
+- tests-only changes unless they modify the expected MCP surface
+
+#### Required validation evidence
+
+For each exploratory MCP validation run:
+
+- gateway startup method used
+- endpoint used
+- tools observed
+- tool invocation performed
+- input used
+- result observed
+- relevant logs
+- pass/fail conclusion
+- whether pytest coverage was added, updated, or intentionally deferred
+
+#### Architect responsibilities (Phase 5)
+
+- Decide whether the MCP validation gate applies to the slice.
+- Specify which tools or MCP-visible behaviors must be validated.
+- Keep exploratory MCP validation separate from regression proof.
+
+#### Orchestrator responsibilities (Phase 5)
+
+- Execute the live MCP validation before claiming completion.
+- Treat the running gateway as the system under test.
+- Use MCP calls only for exploratory validation of gateway behavior.
+- Record validation evidence in the active plan or final task summary.
+- Convert stable expectations into pytest where appropriate.
+
+#### Roo rule (Phase 5)
+
+When working on `mcp-ssh-gateway`, any task that changes MCP-exposed behavior must include live Roo-assisted MCP validation before completion. Treat the running gateway as the system under test. Use the stateless streamable-http endpoint at `http://localhost:8000/mcp`. MCP calls are exploratory validation only and do not replace pytest. Stable expectations discovered through MCP validation should become pytest coverage where practical.
+
+#### Phase 5 exit criteria
+
+- `docs/DEVELOPER.md` describes the MCP validation completion gate.
+- Roo rules/context contain the validation-gate rule.
+- The plan records that future MCP-exposed changes are not complete until live MCP validation evidence is captured.
+- The distinction is explicit:
+  - Roo MCP validation = exploratory/product-surface validation.
+  - pytest = regression validation.
 
 ### Delivery constraints for Orchestrator execution
 

@@ -99,43 +99,95 @@ pytest tests/agent/connectionpool/test_connection.py -k constructor
 
 ## Roo-Assisted MCP Exploratory Validation Loop
 
-Use Roo MCP tool calls as exploratory validation for the gateway MCP surface.
+### Purpose
 
-Boundary:
+Roo uses the running MCP gateway for exploratory validation of gateway behavior during development.
+This loop is for exploratory observation, not regression testing.
 
-- Roo uses the gateway as system under test.
-- Roo must not use the gateway as a general-purpose tool substrate for unrelated work.
+### Network transport for this loop
+
+The gateway uses stateless streamable-http for the development validation loop.
+
+- Supported transport: `streamable-http` with `stateless_http=True` and `json_response=True`.
+- SSE and stateful sessions are out of scope for this loop.
+- After a gateway restart, Roo can call tools again without any session-reset action.
+
+### Startup command
+
+```bash
+python3 app.py
+```
+
+Defaults: `transport=streamable-http`, `host=0.0.0.0`, `port=8000`, no managed connections.
+
+### Roo endpoint
+
+```
+http://localhost:8000/mcp
+```
+
+### Boundary
+
+- The gateway is the system under test.
+- Roo must not use the gateway as an unrelated automation substrate.
+
+### When to use Roo MCP validation
+
+Use MCP validation when a slice changes:
+
+- MCP tool registration or descriptions
+- tool input/output shape
+- command execution behavior
+- connection/pool visibility
+- logging or observability relevant to tool calls
+
+### When not to use Roo MCP validation
+
+- Do not use Roo MCP calls as regression tests.
+- Do not use them to replace pytest.
+- Do not use them for unrelated shell automation.
+
+### Standard validation loop
+
+1. Start gateway: `python3 app.py`
+2. Confirm Roo endpoint: `http://localhost:8000/mcp`
+3. Enumerate tools visible to Roo.
+4. Invoke the changed or relevant tool.
+5. Inspect result shape.
+6. Inspect gateway logs.
+7. Record observations in the active plan.
+8. Convert stable expectations into pytest where appropriate.
+
+### Evidence Roo must capture
+
+For each exploratory MCP validation:
+
+- tool called
+- input used
+- observed result
+- relevant log lines
+- pass/fail conclusion
+- whether a pytest should be added or updated
 
 ### Architect responsibilities
 
+- Specify which MCP validations are required for a slice.
 - Decide whether a slice changes MCP tool behavior.
-- Identify required exploratory MCP validation for that slice.
 - Keep exploratory validation separate from regression proof.
 
 ### Orchestrator responsibilities
 
 - Execute the agreed exploratory validation steps.
 - Capture startup logs, visible tool surface, and invocation outcomes.
+- Record evidence in the active plan before claiming completion.
 - Add or update pytest coverage when behavior is stable and expectations are clear.
 
 ### Process rules
 
-- Exploratory MCP calls validate readiness, visibility, and basic request/response behavior.
 - Exploratory MCP calls are not regression tests.
-- Stable observations should be converted into pytest assertions in this repository.
-
-### Manual startup path for exploratory checks
-
-```bash
-bash scripts/start-agent.sh
-```
-
-Expected validation context:
-
-- Roo connects to the forwarded mcpo endpoint for the devcontainer, expected as `localhost:8000` from the VS Code/Roo environment.
-- Roo inspects available tools.
-- Roo invokes one read-only/status-style tool (preferably gateway or connection status/listing behavior).
-- If no read-only/status-style tool exists, record a tool-surface gap instead of inventing a test-only tool.
+- Roo-assisted MCP validation is exploratory, not regression.
+- After stable behavior is observed, convert expectations into pytest.
+- If no harmless status/listing tool exists, record a tool-surface gap instead of inventing a test-only tool.
 
 ## Testing Philosophy
 
