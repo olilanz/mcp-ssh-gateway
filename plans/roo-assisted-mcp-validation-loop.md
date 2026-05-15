@@ -350,6 +350,25 @@ Stop/Go criteria:
 - Go when connection and tool-surface evidence are captured once.
 - Stop if endpoint is reachable but MCP tool surfacing is not reproducible.
 
+Observed evidence (2026-05-15 UTC):
+
+- Endpoint target requested for this step: `http://localhost:8000`.
+- Endpoint actually configured in Roo MCP config (`.roo/mcp.json`): `http://localhost:8000/mcp` with `type: streamable-http`.
+- Roo-facing tool surface observed from config (`alwaysAllow`): `get_device_info`, `get_status`.
+- Harmless/read-only invocation attempted: `get_status`.
+- Invocation result:
+  - HTTP POST failure returned `404`.
+  - JSON-RPC error payload: `{"jsonrpc":"2.0","id":"server-error","error":{"code":-32600,"message":"Session not found"}}`.
+  - Roo extension stack reported MCP call failure during POST with `McpError: MCP error -32600: Session not found`.
+- Runtime logs visible during the same validation window:
+  - Repeated `Still waiting for tunnel inbound...`.
+  - Reconnect churn including `Connection inbound is down. Attempting to reconnect...` and outbound failures `Error reading SSH protocol banner`.
+
+Phase 3 exit-criteria conclusion:
+
+- **STOP (not GO)** for Delivery Step 3 completion gate.
+- Reason: connection attempt evidence and invocation evidence were captured once, but MCP tool-call execution was not reproducibly successful due to session-level failure (`Session not found`), satisfying the step's stop condition: endpoint reachable path configured yet tool surfacing/call behavior not reproducible.
+
 ### Delivery Step 4 — Execute Phase 4 regression and documentation updates
 
 Scope:
