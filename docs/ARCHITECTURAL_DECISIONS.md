@@ -45,3 +45,26 @@ Rationale:
 
 - Reduces drift between local and container environments.
 - Keeps dependency governance in one canonical source.
+
+## ADR-0004: Use stateless streamable HTTP for the development validation loop
+
+- Status: Accepted
+- Date: 2026-05-15
+
+Decision:
+
+- The gateway uses streamable-http as the supported network MCP transport for the current development validation loop.
+- The server is configured with `stateless_http=True` and `json_response=True`.
+- SSE and stateful MCP sessions are out of scope for this phase.
+- Stateful sessions may be revisited later when concrete scenarios require session continuity or richer streaming behavior.
+
+Rationale:
+
+- Roo-assisted validation must support edit/restart/test without stale client session failures.
+- Gateway product behavior must not depend on MCP transport-session state.
+- Stateless request/response behavior matches current tool usage and keeps the boundary simple.
+
+Trade-off:
+
+- No reliance on per-client MCP transport-session memory.
+- Advanced stateful/session-continuity behavior is deferred.

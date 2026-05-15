@@ -110,7 +110,7 @@ The gateway uses stateless streamable-http for the development validation loop.
 
 - Supported transport: `streamable-http` with `stateless_http=True` and `json_response=True`.
 - SSE and stateful sessions are out of scope for this loop.
-- After a gateway restart, Roo can call tools again without any session-reset action.
+- With the current stateless streamable-http configuration, Roo can call tools after a gateway restart without a session-reset action.
 
 ### Startup command
 

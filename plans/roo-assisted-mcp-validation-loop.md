@@ -212,24 +212,25 @@ Exit criteria:
 - This plan checklist is updated to reflect Phase 4 complete.
 - The distinction between Roo MCP validation (exploratory) and pytest (regression) is explicit in documentation.
 
-Phase 4 open items (not yet closed — Phase 4 is INCOMPLETE):
+Phase 4 closed items (all resolved — Phase 4 is COMPLETE):
 
-1. **ADR-0004 not yet added to `docs/ARCHITECTURAL_DECISIONS.md`.**
-   - `docs/adr-stateless-streamable-http.md` exists as a standalone file but `docs/ARCHITECTURAL_DECISIONS.md` still only has ADR-0001 through ADR-0003. ADR-0004 must be added there.
-   - Suggested content for `docs/ARCHITECTURAL_DECISIONS.md`:
-     - Title: `ADR-0004: Use stateless streamable HTTP for the development validation loop`
-     - Decision: gateway uses `streamable-http` with `stateless_http=True` and `json_response=True`; SSE and stateful sessions are out of scope for this phase; stateful sessions may be revisited when concrete scenarios require them.
-     - Rationale: Roo-assisted validation must survive edit/restart/test cycles without stale client session failures; gateway product behavior must not depend on MCP transport-session state; stateless request/response matches current tool usage.
-     - Trade-off: no per-client MCP session memory; advanced stateful/session-continuity behavior is deferred.
+1. **ADR-0004 added to `docs/ARCHITECTURAL_DECISIONS.md`.** ✅
+   - Entry added with title, decision, rationale, and trade-off sections in the same format as ADR-0001 through ADR-0003.
+   - Standalone `docs/adr-stateless-streamable-http.md` already existed; `docs/ARCHITECTURAL_DECISIONS.md` now includes ADR-0004 as the canonical index entry.
 
-2. **pytest coverage decision not yet made explicit.**
-   - Either: add focused tests for CLI default transport wiring (e.g., confirm `--transport` default is `streamable-http`, `--host` default is `0.0.0.0`, `--port` default is `8000`) where the wiring can be tested without starting a live Uvicorn server.
-   - Or: update the plan to state explicitly that full MCP listener/Roo integration is exploratory and not covered by pytest in this slice, while lower-level startup/config wiring behavior is covered by existing or targeted unit tests.
-   - Do not claim Phase 4 complete until this decision is recorded.
+2. **pytest coverage decision made explicit.** ✅
+   - Focused wiring tests exist in `tests/agent/test_run_agent_wiring.py` and cover CLI/transport default wiring:
+     - `test_run_agent_constructs_fastmcp_with_stateless_http` — verifies `stateless_http=True` and `json_response=True` in FastMCP constructor kwargs.
+     - `test_run_agent_passes_host_and_port_to_fastmcp` — verifies host/port forwarding.
+     - `test_run_agent_calls_mcp_run_with_transport` — verifies `mcp.run(transport=...)` uses the passed transport argument.
+     - `test_app_py_default_transport_is_streamable_http` — verifies app.py parser defaults to `streamable-http`, `0.0.0.0`, `8000`.
+   - Full MCP listener/Roo integration is exploratory and is not covered by pytest in this slice.
+   - Lower-level startup/config behavior is covered by the wiring tests above.
+   - All 4 wiring tests pass: `pytest tests/agent/test_run_agent_wiring.py -v` → 4 passed.
 
-3. **`docs/DEVELOPER.md` wording fix required.**
-   - The phrase "After a gateway restart, Roo can call tools again without any session-reset action" is too general. It must be scoped to the stateless configuration explicitly:
-   - Replace with: "With the current stateless streamable-http configuration (`stateless_http=True, json_response=True`), Roo can call tools after a gateway restart without a session-reset action."
+3. **`docs/DEVELOPER.md` wording fixed.** ✅
+   - Replaced: "After a gateway restart, Roo can call tools again without any session-reset action."
+   - With: "With the current stateless streamable-http configuration, Roo can call tools after a gateway restart without a session-reset action."
 
 ## Observation capture protocol
 
@@ -277,10 +278,10 @@ This slice is complete when all are true:
 - [x] Phase 2 completed with reliable manual startup path.
 - [x] Phase 3A completed with documented Roo MCP client validation procedure.
 - [x] Phase 3B completed with Roo smoke validation evidence.
-- [ ] Phase 4 — **INCOMPLETE — two open items remain before Phase 4 can be closed**:
-  - [ ] ADR-0004 not yet recorded in `docs/ARCHITECTURAL_DECISIONS.md` (standalone `docs/adr-stateless-streamable-http.md` exists but is not linked from the ADR index).
-  - [ ] pytest coverage decision not yet explicit (add focused wiring tests or explicitly defer with recorded reason).
-  - [ ] `docs/DEVELOPER.md` wording fix required: scope the restart-resilience claim to the stateless streamable-http configuration.
+- [x] Phase 4 — **COMPLETE**:
+  - [x] ADR-0004 recorded in `docs/ARCHITECTURAL_DECISIONS.md` with title, decision, rationale, and trade-off sections. ✅
+  - [x] pytest coverage decision explicit: focused wiring tests in `tests/agent/test_run_agent_wiring.py` cover `stateless_http=True`, `json_response=True`, host/port forwarding, transport arg forwarding, and app.py CLI defaults. Full MCP listener/Roo integration is exploratory and not covered by pytest in this slice. All 4 wiring tests pass. ✅
+  - [x] `docs/DEVELOPER.md` wording fixed: restart-resilience claim scoped to stateless streamable-http configuration. ✅
   - `docs/DEVELOPER.md` updated: startup command and exploratory validation loop documented ✅
   - `docs/adr-stateless-streamable-http.md` created as standalone ADR file ✅
   - Explicit Roo MCP (exploratory) vs pytest (regression) distinction written in plan ✅
