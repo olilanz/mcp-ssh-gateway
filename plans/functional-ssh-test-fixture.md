@@ -1,5 +1,5 @@
-# Superseded
+# Archived
 
-This draft has been superseded by the correctly-named active plan:
+This file has been moved to [`plans/archive/functional-ssh-test-fixture.md`](archive/functional-ssh-test-fixture.md).
 
-[`plans/realistic-sshd-fixture-test-slice.md`](realistic-sshd-fixture-test-slice.md)
+Active plan: [`plans/realistic-sshd-fixture-test-slice.md`](realistic-sshd-fixture-test-slice.md)
