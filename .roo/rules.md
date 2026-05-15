@@ -60,10 +60,12 @@ Non-negotiable summary:
 - Use stateless streamable-http at `http://localhost:8000/mcp`.
 - Use `python3 app.py` as the canonical startup command.
 - MCP validation is exploratory/product-surface validation and does not replace pytest.
+- Roo treats the running gateway as the system under test during live MCP validation.
 - Roo may start the gateway as a task-scoped validation process when needed and must tear down only what it started.
 - Roo must not use the gateway as a general-purpose automation substrate.
 - Do not introduce supervisors, watchers, hot reload, or persistent lifecycle infrastructure.
 - Do not add SSE or stateful sessions unless explicitly requested in a future slice.
+- The gateway remains MCP-native. Do not build or expose a custom REST API.
 
 Gate applies when a task changes:
 - MCP tool registration, tool names or descriptions, tool input/output shape
