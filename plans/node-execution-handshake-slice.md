@@ -631,3 +631,174 @@ Reading the full file and then checking its size would consume memory unnecessar
 - Streaming command output
 - Interactive sessions
 - Configurable download size limit (hardcoded 10 MB for v1)
+
+---
+
+## Delivery Plan
+
+Each phase is a discrete, verifiable step. Unit tests for each phase must pass before starting the next. Functional tests run last against the live sshd fixture.
+
+### Phase 1 — `resources/node/handshake.sh`
+
+**Deliverables:**
+- Create `resources/node/` directory
+- Create `resources/node/handshake.sh` per the spec above (POSIX `sh`, `printf`, safe `os_pretty_name` block)
+- `chmod +x resources/node/handshake.sh`
+
+**Verify:** `sh resources/node/handshake.sh` runs locally and produces `key=value` output.
+
+---
+
+### Phase 2 — `NodeHandshakeService` + unit tests
+
+**Deliverables:**
+- Create `agent/nodes/handshake.py` with `NodeHandshakeService`
+  - `__init__(self, resource_root=None)` — resolve via `Path(__file__).parent.parent`
+  - `run(self, connection, timeout=10) -> dict`
+  - `_parse_output(self, stdout: str) -> dict` (private, for unit testability)
+- Create `tests/agent/nodes/__init__.py` if not present
+- Create `tests/agent/nodes/test_handshake_service.py` with all 10 unit tests listed in Phase 2 of the architecture plan
+
+**Verify:** `pytest tests/agent/nodes/test_handshake_service.py -v` passes. No live SSH required.
+
+---
+
+### Phase 3 — `pool.get_connection` + `ensure_connection_open`
+
+**Deliverables:**
+- Add `get_connection(name) -> Optional[Connection]` to `agent/connectionpool/pool.py`
+- Add `ensure_connection_open(name) -> Optional[Connection]` to `agent/connectionpool/pool.py`
+- Add unit tests to `tests/agent/connectionpool/test_pool.py`:
+  - `test_get_connection_returns_connection_by_name`
+  - `test_get_connection_returns_none_for_unknown`
+  - `test_ensure_connection_open_returns_open_connection`
+  - `test_ensure_connection_open_returns_none_for_unknown`
+  - `test_ensure_connection_open_calls_open_when_closed`
+
+**Verify:** `pytest tests/agent/connectionpool/test_pool.py -v` passes. Existing pool tests must not regress.
+
+---
+
+### Phase 4 — `NodeService.ensure_node_ready` + `_NodeReady`
+
+**Deliverables:**
+- Add `_NodeReady` dataclass to `agent/nodes/service.py` (module-private)
+- Add `ensure_node_ready(name) -> _NodeReady | dict` to `NodeService`
+- Inject `handshake_service` into `NodeService.__init__` (default `NodeHandshakeService()`)
+- Add unit tests to `tests/agent/nodes/test_node_service.py`:
+  - `test_ensure_node_ready_unknown_node_returns_error`
+  - `test_ensure_node_ready_disabled_node_returns_error`
+  - `test_ensure_node_ready_not_in_pool_returns_error`
+  - `test_ensure_node_ready_connection_not_open_returns_error`
+  - `test_ensure_node_ready_runs_handshake_when_cache_empty`
+  - `test_ensure_node_ready_skips_handshake_when_cache_populated`
+  - `test_ensure_node_ready_returns_node_ready_instance`
+
+**Verify:** `pytest tests/agent/nodes/ -v` passes. Inject mock `handshake_service` in all new tests.
+
+---
+
+### Phase 5 — `run_command_on_node` + timeout
+
+**Deliverables:**
+- Add `timeout: int | None = None` parameter to `BaseConnection.execute()` in `agent/connectionpool/connection.py`
+- Add `socket.timeout` → `TimeoutError` handling in `execute()`
+- Add `run_command_on_node(name, command, timeout=30)` to `NodeService`
+- Add unit tests to `tests/agent/connectionpool/test_connection.py`:
+  - `test_execute_passes_timeout_to_channel_settimeout`
+  - `test_execute_raises_timeout_error_on_channel_timeout`
+- Add unit tests to `tests/agent/nodes/test_node_service.py`:
+  - `test_run_command_on_node_delegates_to_connection`
+  - `test_run_command_on_node_unknown_node_returns_error`
+  - `test_run_command_on_node_disabled_node_returns_error`
+  - `test_run_command_on_node_not_in_pool_returns_error`
+  - `test_run_command_on_node_timeout_returns_error`
+
+**Verify:** `pytest tests/agent/ -v` passes. No existing tests regress.
+
+---
+
+### Phase 6 — `upload_file_to_node` / `download_file_from_node`
+
+**Deliverables:**
+- Add `upload_file(remote_path, data_b64, mode="0644")` to `BaseConnection`
+- Add `download_file(remote_path)` to `BaseConnection` (with `stat` size guard, 10 MB limit, `try/finally` SFTP close)
+- Add `upload_file_to_node(name, remote_path, data_b64, mode="0644")` to `NodeService`
+- Add `download_file_from_node(name, remote_path)` to `NodeService`
+- Add unit tests to `tests/agent/connectionpool/test_connection.py` (all 9 listed in Phase 6 of the architecture plan)
+- Add unit tests to `tests/agent/nodes/test_node_service.py`:
+  - `test_upload_file_to_node_delegates_to_connection`
+  - `test_upload_file_to_node_disabled_node_returns_error`
+  - `test_download_file_from_node_delegates_to_connection`
+  - `test_download_file_from_node_disabled_node_returns_error`
+
+**Verify:** `pytest tests/agent/ -v` passes. No regressions.
+
+---
+
+### Phase 7 — MCP registration + handler tests
+
+**Deliverables:**
+- Add three `@mcp.tool()` registrations to `agent/mcp_handlers.py` (delegate-only)
+- Add handler delegation tests to `tests/agent/test_mcp_node_tools.py`:
+  - `test_run_command_on_node_handler_delegates`
+  - `test_upload_file_to_node_handler_delegates`
+  - `test_download_file_from_node_handler_delegates`
+
+**Verify:** `pytest tests/agent/ -v` full suite passes. Confirm three new tools appear in `mcp.list_tools()` in the integration test or via `run_agent` startup log.
+
+---
+
+### Phase 8 — Functional tests
+
+**Deliverables:**
+- Create `tests/functional/test_node_execution_functional.py` with all 8 tests listed in Phase 8 of the architecture plan
+- All tests use the `spawn_sshd` fixture; all marked `@pytest.mark.functional @pytest.mark.requires_sshd`
+
+**Verify:** `pytest tests/functional/test_node_execution_functional.py -v -m functional` passes against the live sshd fixture.
+
+**Acceptance gate:**
+```
+test_run_command_on_node_echo_hello             PASSED
+test_run_command_on_node_nonzero_exit_code      PASSED
+test_run_command_on_node_disabled_node_rejected PASSED
+test_run_command_on_node_timeout                PASSED
+test_upload_file_to_node_writes_file            PASSED
+test_download_file_from_node_reads_file         PASSED
+test_handshake_populates_get_node_info          PASSED
+test_handshake_sh_runs_on_sshd_fixture          PASSED
+```
+
+---
+
+### Phase 9 — Docs + live MCP validation
+
+**Deliverables:**
+- Update `docs/ARCHITECTURE.md`: add `NodeHandshakeService`, `resources/` layer, `ensure_node_ready`, `_NodeReady`
+- Update `docs/DEVELOPER.md`: document `run_command_on_node`, `upload_file_to_node`, `download_file_from_node`, note `resources/node/handshake.sh`
+- Live MCP validation: confirm tool signatures and live round-trip calls succeed
+
+**Verify:** `pytest -m "not functional" -v` — full non-functional suite passes with no regressions.
+
+---
+
+### Done Criteria for the Slice
+
+The slice is complete when all of the following are true:
+
+```
+[ ] resources/node/handshake.sh exists, is POSIX sh, runs locally
+[ ] NodeHandshakeService parses handshake output correctly
+[ ] pool.get_connection() and pool.ensure_connection_open() behave per spec
+[ ] NodeService.ensure_node_ready() chains all guards and runs handshake if needed
+[ ] run_command_on_node captures exit_code and handles timeout
+[ ] upload_file_to_node writes correct bytes on node
+[ ] download_file_from_node round-trips base64 content correctly
+[ ] Disabled node rejects all three execution tools
+[ ] get_node_info() returns handshake facts after first execution
+[ ] All unit tests pass (pytest -m "not functional")
+[ ] All 8 functional tests pass (pytest -m functional)
+[ ] Three new tools visible and callable via MCP
+[ ] No existing tests regressed
+[ ] Docs updated
+```

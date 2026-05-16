@@ -206,3 +206,65 @@ def test_register_tools_signature_accepts_node_service():
     mcp = make_test_mcp()
     svc = make_mock_node_service()
     mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
+
+
+# ---------------------------------------------------------------------------
+# Handler tests — run_command_on_node / upload_file_to_node / download_file_from_node
+# ---------------------------------------------------------------------------
+
+def test_run_command_on_node_handler_delegates():
+    """run_command_on_node handler must delegate to node_service.run_command_on_node() and return its result."""
+    mcp = make_test_mcp()
+    svc = make_mock_node_service()
+    svc.run_command_on_node.return_value = {
+        "exit_code": 0,
+        "stdout": "hello",
+        "stderr": "",
+        "command": "echo hello",
+        "started_at": "...",
+        "ended_at": "...",
+    }
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
+
+    fn = _get_tool_fn(mcp, "run_command_on_node")
+    result = fn(name="test-node", command="echo hello", timeout=30)
+
+    svc.run_command_on_node.assert_called_once_with(name="test-node", command="echo hello", timeout=30)
+    assert result == {
+        "exit_code": 0,
+        "stdout": "hello",
+        "stderr": "",
+        "command": "echo hello",
+        "started_at": "...",
+        "ended_at": "...",
+    }
+
+
+def test_upload_file_to_node_handler_delegates():
+    """upload_file_to_node handler must delegate to node_service.upload_file_to_node() and return its result."""
+    mcp = make_test_mcp()
+    svc = make_mock_node_service()
+    svc.upload_file_to_node.return_value = {"status": "written", "path": "/tmp/test.txt"}
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
+
+    fn = _get_tool_fn(mcp, "upload_file_to_node")
+    result = fn(name="test-node", remote_path="/tmp/test.txt", data_b64="aGVsbG8=", mode="0644")
+
+    svc.upload_file_to_node.assert_called_once_with(
+        name="test-node", remote_path="/tmp/test.txt", data_b64="aGVsbG8=", mode="0644"
+    )
+    assert result == {"status": "written", "path": "/tmp/test.txt"}
+
+
+def test_download_file_from_node_handler_delegates():
+    """download_file_from_node handler must delegate to node_service.download_file_from_node() and return its result."""
+    mcp = make_test_mcp()
+    svc = make_mock_node_service()
+    svc.download_file_from_node.return_value = {"status": "ok", "path": "/tmp/test.txt", "data_b64": "aGVsbG8="}
+    mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
+
+    fn = _get_tool_fn(mcp, "download_file_from_node")
+    result = fn(name="test-node", remote_path="/tmp/test.txt")
+
+    svc.download_file_from_node.assert_called_once_with(name="test-node", remote_path="/tmp/test.txt")
+    assert result == {"status": "ok", "path": "/tmp/test.txt", "data_b64": "aGVsbG8="}

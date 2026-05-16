@@ -96,6 +96,10 @@ def spawn_sshd():
 
         # Write sshd_config
         sshd_config_path = os.path.join(tempdir, "sshd_config")
+        sftp_server = "/usr/lib/openssh/sftp-server"
+        if not os.path.exists(sftp_server):
+            sftp_server = "/usr/lib/sftp-server"
+
         with open(sshd_config_path, "w") as f:
             f.write(f"""Port {port}
 ListenAddress 127.0.0.1
@@ -110,6 +114,7 @@ PidFile none
 LogLevel VERBOSE
 UsePAM no
 ChallengeResponseAuthentication no
+Subsystem sftp {sftp_server}
 """)
 
         log_path = os.path.join(tempdir, "sshd.log")

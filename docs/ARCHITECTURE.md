@@ -206,6 +206,36 @@ The LLM provides reasoning and planning. Runbooks and skills provide procedural 
 
 Together, they allow larger workflows to be executed without requiring the user to remember every command, flag, sequence, or diagnostic step.
 
+## Layer Responsibilities
+
+The following table describes each layer's responsibility in the current implementation:
+
+| Layer | Responsibility |
+|---|---|
+| `resources/node/handshake.sh` | Node-side resource scripts (POSIX sh, no deps) |
+| `NodeHandshakeService` | Node semantics: loads script, executes over SSH, parses facts |
+| `NodeService` | Node guards + readiness orchestration + execution delegation |
+| `ConnectionPool` | Transport lifecycle + connection lookup/open |
+| `Connection` / `BaseConnection` | SSH execution (with timeout), SFTP upload/download |
+| `NodeInfoCache` / `NodeRegistry` | Stores handshake facts and node config |
+| `mcp_handlers.py` | Delegates to service layer only — no logic |
+
+## Error Contract
+
+MCP tool error responses use a stable set of error keys. The following keys are currently defined:
+
+| Error key | Meaning |
+|---|---|
+| `node_not_found` | No node with that name in the registry |
+| `node_disabled` | Node is known but currently disabled |
+| `not_in_pool` | Node exists in registry but has no pool entry |
+| `connection_not_open` | Node is in the pool but connection could not be opened |
+| `timeout` | Command exceeded the requested timeout |
+| `invalid_base64` | Upload data was not valid base64 |
+| `invalid_mode` | Chmod mode string was not a valid octal mode |
+| `file_not_found` | Remote file does not exist (download) |
+| `file_too_large` | Download exceeds the 10 MB limit |
+
 ## Current Implementation Boundary
 
 Current code implements:
@@ -219,7 +249,13 @@ Current code implements:
 - node-oriented MCP API surface (`get_node_status`, `get_node_info`, `add_node`, `remove_node`, `enable_node`, `disable_node`),
 - `NodeRegistry` (in-memory, thread-safe; stores `NodeConfig` and `NodeInfoCache`),
 - `NodeService` (business logic layer over registry and pool; composes `NodeRuntimeState` at call time),
-- and `ConnectionPool` disable/remove/enable seam (`disable_connection`, `enable_connection`, `remove_connection`).
+- `ConnectionPool` disable/remove/enable seam (`disable_connection`, `enable_connection`, `remove_connection`),
+- `ConnectionPool.get_connection(name)` — thread-safe lookup, returns `Connection | None`,
+- `ConnectionPool.ensure_connection_open(name)` — re-opens if closed or broken, returns `Connection | None`,
+- node execution MCP tools (`run_command_on_node`, `upload_file_to_node`, `download_file_from_node`),
+- `NodeService.ensure_node_ready()` — five-step readiness gate (registry exists → enabled → pool.get_connection → ensure_connection_open → handshake if cache empty),
+- `NodeHandshakeService` — loads `resources/node/handshake.sh`, executes via `sh -s`, parses `key=value` facts into `NodeInfoCache`,
+- and `resources/node/handshake.sh` — POSIX sh script collecting node facts (`hostname`, `kernel_name`, `kernel_release`, `architecture`, `current_user`, `shell`, `os_pretty_name`, `collected_at`).
 
 Current code is evolving around:
 
@@ -237,6 +273,18 @@ Current code does not yet implement:
 - or advanced workflow execution primitives.
 
 Tests and documentation must not claim reverse tunnel listener behavior until it exists in code.
+
+## Resources
+
+The `resources/` directory contains scripts and artifacts that run on managed nodes, not on the gateway.
+
+`resources/node/` scripts are POSIX sh with no external dependencies. They are first-class artifacts: visible, reviewable, and independently runnable:
+
+```bash
+ssh <node> 'sh -s' < resources/node/handshake.sh
+```
+
+New node-side scripts should be placed in `resources/node/`, not inlined in Python.
 
 ## Invariants
 

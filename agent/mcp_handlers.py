@@ -68,3 +68,18 @@ def register_tools(mcp: FastMCP, node_service, agent_identity_service):
         logging.debug(f"upload_file called for {path} with mode {mode}")
         write_file(path, data_b64, mode)
         return {"status": "written", "path": path}
+
+    @mcp.tool()
+    def run_command_on_node(name: str, command: str, timeout: int = 30) -> dict:
+        logging.debug(f"run_command_on_node called: name={name}, command={command}, timeout={timeout}")
+        return node_service.run_command_on_node(name=name, command=command, timeout=timeout)
+
+    @mcp.tool()
+    def upload_file_to_node(name: str, remote_path: str, data_b64: str, mode: str = "0644") -> dict:
+        logging.debug(f"upload_file_to_node called: name={name}, remote_path={remote_path}, mode={mode}")
+        return node_service.upload_file_to_node(name=name, remote_path=remote_path, data_b64=data_b64, mode=mode)
+
+    @mcp.tool()
+    def download_file_from_node(name: str, remote_path: str) -> dict:
+        logging.debug(f"download_file_from_node called: name={name}, remote_path={remote_path}")
+        return node_service.download_file_from_node(name=name, remote_path=remote_path)

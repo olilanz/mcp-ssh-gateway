@@ -252,3 +252,58 @@ def test_monitor_rechecks_disabled_connection_before_open():
         pool._monitor_once()
 
     conn.open.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# get_connection tests (Phase 3)
+# ---------------------------------------------------------------------------
+
+def test_get_connection_returns_connection_by_name():
+    """get_connection returns the matching Connection object when found."""
+    pool = _make_pool_with_fake_connections(["kappa"])
+    result = pool.get_connection("kappa")
+    assert result is not None
+    assert result.name == "kappa"
+
+
+def test_get_connection_returns_none_for_unknown():
+    """get_connection returns None when the name is not in the pool."""
+    pool = _make_pool_with_fake_connections([])
+    result = pool.get_connection("no-such-connection")
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# ensure_connection_open tests (Phase 3)
+# ---------------------------------------------------------------------------
+
+def test_ensure_connection_open_returns_open_connection():
+    """ensure_connection_open returns the connection directly when already OPEN."""
+    pool = _make_pool_with_fake_connections(["lambda"])
+    pool.connections[0].get_state.return_value = ConnectionState.OPEN
+    result = pool.ensure_connection_open("lambda")
+    assert result is not None
+    assert result.name == "lambda"
+    pool.connections[0].open.assert_not_called()
+
+
+def test_ensure_connection_open_returns_none_for_unknown_name():
+    """ensure_connection_open returns None when name is not in pool."""
+    pool = _make_pool_with_fake_connections([])
+    result = pool.ensure_connection_open("not-in-pool")
+    assert result is None
+
+
+def test_ensure_connection_open_calls_open_when_closed():
+    """ensure_connection_open calls open() on a CLOSED connection and returns it on success."""
+    pool = _make_pool_with_fake_connections(["mu"])
+    conn = pool.connections[0]
+
+    # Initially CLOSED; after open() is called, state becomes OPEN
+    states = iter([ConnectionState.CLOSED, ConnectionState.OPEN])
+    conn.get_state.side_effect = lambda: next(states)
+
+    result = pool.ensure_connection_open("mu")
+    conn.open.assert_called_once()
+    assert result is not None
+    assert result.name == "mu"

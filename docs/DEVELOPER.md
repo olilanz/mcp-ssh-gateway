@@ -143,6 +143,76 @@ Tests must not assume a full reverse tunnel listener lifecycle exists until impl
 
 `/data/keys` may exist in container or developer environments for manual experimentation, but tests should prefer generated temporary keys unless a scenario explicitly requires mounted keys.
 
+## Node Execution Tools (v1)
+
+Three node-scoped execution tools complete the v1 MCP API surface. All three go through `NodeService.ensure_node_ready()`, a five-step readiness gate: registry exists → enabled → pool lookup → connection open → handshake (if cache empty).
+
+### run_command_on_node
+
+Executes a shell command on a named, enabled, connected node.
+
+Parameters:
+- `name` — registered node name
+- `command` — shell command string
+- `timeout` — max seconds to wait (default 30)
+
+Returns: `CommandResult` fields (`command`, `exit_code`, `stdout`, `stderr`, `started_at`, `ended_at`).
+
+Error responses: `node_not_found`, `node_disabled`, `not_in_pool`, `connection_not_open`, `timeout`.
+
+### upload_file_to_node
+
+Uploads a base64-encoded file to a node via SFTP.
+
+Parameters:
+- `name` — registered node name
+- `remote_path` — absolute path on the remote node
+- `data_b64` — base64-encoded file content
+- `mode` — chmod mode string, e.g. `"0644"` (default `"0644"`)
+
+Returns: `{"status": "written", "path": remote_path}`.
+
+Error responses: `node_not_found`, `node_disabled`, `invalid_base64`, `invalid_mode`.
+
+### download_file_from_node
+
+Downloads a file from a node via SFTP, returning base64-encoded content.
+
+Parameters:
+- `name` — registered node name
+- `remote_path` — absolute path on the remote node
+
+Returns: `{"status": "ok", "path": remote_path, "data_b64": "<base64>"}`.
+
+Error responses: `node_not_found`, `node_disabled`, `file_not_found`, `file_too_large` (limit: 10 MB).
+
+### Node Handshake
+
+After the first execution call on a node, a minimal handshake runs automatically via [`NodeHandshakeService`](../agent/nodes/handshake.py):
+
+- Executes `resources/node/handshake.sh` on the node via `sh -s`
+- Collects: `hostname`, `kernel_name`, `kernel_release`, `architecture`, `current_user`, `shell`, `os_pretty_name`, `collected_at`
+- Stored in `NodeInfoCache`, visible via `get_node_info()`
+
+The handshake script is POSIX sh, has no external dependencies, and can be run manually:
+
+```bash
+ssh <node> 'sh -s' < resources/node/handshake.sh
+```
+
+### Legacy local tools
+
+`run_command` and `upload_file` remain unchanged and operate on the gateway host, not on nodes.
+
+## Resources directory
+
+`resources/node/` contains scripts that run **on managed nodes**, not on the gateway.
+
+Scripts in this directory are:
+- POSIX sh for compatibility with minimal nodes
+- First-class artifacts: visible, reviewable, and independently runnable
+- The correct location for any new node-side scripts — do not inline node-side shell logic in Python
+
 ## Current Implementation Boundary
 
 Current code implements:
@@ -152,7 +222,11 @@ Current code implements:
 - connection pool lifecycle scaffolding,
 - direct SSH connectivity using Paramiko,
 - reverse tunnel probing through already exposed local ports,
-- and structured command execution.
+- structured command execution,
+- node execution MCP tools (`run_command_on_node`, `upload_file_to_node`, `download_file_from_node`),
+- `NodeService.ensure_node_ready()` readiness gate,
+- `NodeHandshakeService` with automatic fact collection on first node use,
+- and `resources/node/handshake.sh` POSIX sh fact-collection script.
 
 Current code is evolving around:
 

@@ -709,3 +709,373 @@ def test_add_node_password_not_in_logs(caplog):
         )
     # Also verify not in return value
     assert secret_password not in str(result)
+
+
+# ---------------------------------------------------------------------------
+# NodeService — ensure_node_ready() tests
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_handshake_service():
+    """Return a MagicMock handshake service with a plausible run() return value."""
+    from unittest.mock import MagicMock
+    hs = MagicMock()
+    hs.run.return_value = {
+        "hostname": {"value": "test-host", "source": "handshake", "collected_at": ""}
+    }
+    return hs
+
+
+def _make_service_for_ready(nodes=None, pool_get_connection=None, pool_ensure_open=None, handshake_service=None):
+    """Build a NodeService with an injectable mock pool supporting get_connection / ensure_connection_open."""
+    from unittest.mock import MagicMock
+    from agent.connectionpool.connection import ConnectionState
+
+    registry = NodeRegistry()
+    if nodes is None:
+        nodes = [("lab-pi-01", "direct", True)]
+    for name, mode, enabled in nodes:
+        cfg = NodeConfig(
+            name=name,
+            mode=mode,
+            enabled=enabled,
+            host="192.168.1.10",
+            port=22,
+            user="pi",
+            id_file=None,
+        )
+        registry.add(cfg)
+
+    pool = MagicMock()
+
+    # get_connection_state is used by existing helper methods — provide a default
+    pool.get_connection_state.return_value = "open"
+
+    # Configurable get_connection behaviour
+    if pool_get_connection is not None:
+        pool.get_connection.side_effect = pool_get_connection
+    else:
+        pool.get_connection.return_value = MagicMock(name="default-conn")
+
+    # Configurable ensure_connection_open behaviour
+    if pool_ensure_open is not None:
+        pool.ensure_connection_open.side_effect = pool_ensure_open
+    else:
+        # Default: return the same object that get_connection would return
+        _default_conn = MagicMock()
+        _default_conn.name = "lab-pi-01"
+        pool.get_connection.return_value = _default_conn
+        pool.ensure_connection_open.return_value = _default_conn
+
+    hs = handshake_service or _make_mock_handshake_service()
+    return NodeService(registry=registry, pool=pool, handshake_service=hs), registry, pool, hs
+
+
+def test_ensure_node_ready_unknown_node_returns_error():
+    """Returns {"error": "node not found", ...} when node is not in registry."""
+    svc, *_ = _make_service_for_ready(nodes=[("lab-pi-01", "direct", True)])
+    result = svc.ensure_node_ready("no-such-node")
+    assert result == {"error": "node not found", "name": "no-such-node"}
+
+
+def test_ensure_node_ready_disabled_node_returns_error():
+    """Returns {"error": "node_disabled", ...} for a disabled node."""
+    svc, *_ = _make_service_for_ready(nodes=[("lab-pi-01", "direct", False)])
+    result = svc.ensure_node_ready("lab-pi-01")
+    assert result == {"error": "node_disabled", "name": "lab-pi-01"}
+
+
+def test_ensure_node_ready_not_in_pool_returns_error():
+    """Returns {"error": "not_in_pool", ...} when pool.get_connection returns None."""
+    svc, *_ = _make_service_for_ready(
+        pool_get_connection=lambda name: None,
+    )
+    result = svc.ensure_node_ready("lab-pi-01")
+    assert result == {"error": "not_in_pool", "name": "lab-pi-01"}
+
+
+def test_ensure_node_ready_connection_not_open_returns_error():
+    """Returns {"error": "connection_not_open", ...} when ensure_connection_open returns None."""
+    from unittest.mock import MagicMock
+    fake_conn = MagicMock()
+    svc, *_ = _make_service_for_ready(
+        pool_get_connection=lambda name: fake_conn,
+        pool_ensure_open=lambda name: None,
+    )
+    result = svc.ensure_node_ready("lab-pi-01")
+    assert result == {"error": "connection_not_open", "name": "lab-pi-01"}
+
+
+def test_ensure_node_ready_runs_handshake_when_cache_empty():
+    """handshake_service.run() is called when NodeInfoCache.facts is empty."""
+    from unittest.mock import MagicMock
+    hs = _make_mock_handshake_service()
+    fake_conn = MagicMock()
+    svc, registry, pool, _ = _make_service_for_ready(
+        pool_get_connection=lambda name: fake_conn,
+        pool_ensure_open=lambda name: fake_conn,
+        handshake_service=hs,
+    )
+    svc.ensure_node_ready("lab-pi-01")
+    hs.run.assert_called_once_with(fake_conn)
+
+
+def test_ensure_node_ready_skips_handshake_when_cache_populated():
+    """handshake_service.run() is NOT called when NodeInfoCache.facts is already populated."""
+    from unittest.mock import MagicMock
+    hs = _make_mock_handshake_service()
+    fake_conn = MagicMock()
+    svc, registry, pool, _ = _make_service_for_ready(
+        pool_get_connection=lambda name: fake_conn,
+        pool_ensure_open=lambda name: fake_conn,
+        handshake_service=hs,
+    )
+    # Pre-populate the cache so handshake should be skipped
+    registry.update_cache(
+        "lab-pi-01",
+        NodeInfoCache(
+            facts={"hostname": {"value": "existing-host", "source": "cache", "collected_at": ""}},
+            collected_at="2026-01-01T00:00:00Z",
+        ),
+    )
+    svc.ensure_node_ready("lab-pi-01")
+    hs.run.assert_not_called()
+
+
+def test_ensure_node_ready_returns_node_ready_instance():
+    """Successful ensure_node_ready returns a _NodeReady with a .connection attribute (not a dict)."""
+    from unittest.mock import MagicMock
+    from agent.nodes.service import _NodeReady
+    fake_conn = MagicMock()
+    svc, *_ = _make_service_for_ready(
+        pool_get_connection=lambda name: fake_conn,
+        pool_ensure_open=lambda name: fake_conn,
+    )
+    result = svc.ensure_node_ready("lab-pi-01")
+    assert not isinstance(result, dict), "Expected _NodeReady, got dict"
+    assert isinstance(result, _NodeReady)
+    assert result.connection is fake_conn
+
+
+# ---------------------------------------------------------------------------
+# NodeService — run_command_on_node() tests
+# ---------------------------------------------------------------------------
+
+
+def _make_noop_handshake():
+    """Return a MagicMock handshake service that does nothing (returns {})."""
+    from unittest.mock import MagicMock
+    hs = MagicMock()
+    hs.run.return_value = {}
+    return hs
+
+
+def _make_service_with_open_connection(name="lab-pi-01"):
+    """Build a NodeService where the named node is enabled and has an open mock connection."""
+    from unittest.mock import MagicMock
+    from agent.connectionpool.connection import ConnectionState
+
+    registry = NodeRegistry()
+    cfg = NodeConfig(
+        name=name,
+        mode="direct",
+        enabled=True,
+        host="192.168.1.10",
+        port=22,
+        user="pi",
+        id_file=None,
+    )
+    registry.add(cfg)
+
+    mock_conn = MagicMock()
+    mock_conn.name = name
+
+    pool = MagicMock()
+    pool.get_connection_state.return_value = "open"
+    pool.get_connection.return_value = mock_conn
+    pool.ensure_connection_open.return_value = mock_conn
+
+    hs = _make_noop_handshake()
+    svc = NodeService(registry=registry, pool=pool, handshake_service=hs)
+    return svc, mock_conn
+
+
+def test_run_command_on_node_delegates_to_connection():
+    """run_command_on_node() calls connection.execute() and returns to_dict() result."""
+    from unittest.mock import MagicMock
+    from datetime import datetime, timezone
+    from agent.connection_result import CommandResult
+
+    svc, mock_conn = _make_service_with_open_connection()
+
+    fake_result = CommandResult(
+        command="echo hi",
+        exit_code=0,
+        stdout="hi\n",
+        stderr="",
+        started_at=datetime.now(timezone.utc),
+        ended_at=datetime.now(timezone.utc),
+    )
+    mock_conn.execute.return_value = fake_result
+
+    result = svc.run_command_on_node("lab-pi-01", "echo hi")
+
+    assert "exit_code" in result
+    assert "stdout" in result
+    assert "stderr" in result
+    assert result["exit_code"] == 0
+    assert result["stdout"] == "hi\n"
+
+
+def test_run_command_on_node_unknown_node_returns_error():
+    """run_command_on_node() returns node not found error for unknown node."""
+    from unittest.mock import MagicMock
+
+    registry = NodeRegistry()
+    pool = MagicMock()
+    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake())
+
+    result = svc.run_command_on_node("no-such-node", "echo hi")
+    assert result == {"error": "node not found", "name": "no-such-node"}
+
+
+def test_run_command_on_node_disabled_node_returns_error():
+    """run_command_on_node() returns node_disabled error for a disabled node."""
+    from unittest.mock import MagicMock
+
+    registry = NodeRegistry()
+    cfg = NodeConfig(
+        name="lab-pi-01",
+        mode="direct",
+        enabled=False,
+        host="192.168.1.10",
+        port=22,
+        user="pi",
+        id_file=None,
+    )
+    registry.add(cfg)
+
+    pool = MagicMock()
+    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake())
+
+    result = svc.run_command_on_node("lab-pi-01", "echo hi")
+    assert result == {"error": "node_disabled", "name": "lab-pi-01"}
+
+
+def test_run_command_on_node_not_in_pool_returns_error():
+    """run_command_on_node() returns not_in_pool error when pool.get_connection returns None."""
+    from unittest.mock import MagicMock
+
+    registry = NodeRegistry()
+    cfg = NodeConfig(
+        name="lab-pi-01",
+        mode="direct",
+        enabled=True,
+        host="192.168.1.10",
+        port=22,
+        user="pi",
+        id_file=None,
+    )
+    registry.add(cfg)
+
+    pool = MagicMock()
+    pool.get_connection_state.return_value = "not_in_pool"
+    pool.get_connection.return_value = None
+
+    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake())
+
+    result = svc.run_command_on_node("lab-pi-01", "echo hi")
+    assert result == {"error": "not_in_pool", "name": "lab-pi-01"}
+
+
+def test_run_command_on_node_timeout_returns_error():
+    """run_command_on_node() returns timeout error when connection.execute raises TimeoutError."""
+    svc, mock_conn = _make_service_with_open_connection()
+    mock_conn.execute.side_effect = TimeoutError("timed out")
+
+    result = svc.run_command_on_node("lab-pi-01", "sleep 100", timeout=1)
+
+    assert result["error"] == "timeout"
+    assert result["name"] == "lab-pi-01"
+    assert result["command"] == "sleep 100"
+
+
+# ---------------------------------------------------------------------------
+# NodeService — upload_file_to_node() / download_file_from_node() tests
+# ---------------------------------------------------------------------------
+
+
+def test_upload_file_to_node_delegates_to_connection():
+    """upload_file_to_node() calls connection.upload_file() with correct args and returns result."""
+    import base64
+
+    svc, mock_conn = _make_service_with_open_connection()
+    mock_conn.upload_file.return_value = {"status": "written", "path": "/tmp/test"}
+
+    valid_b64 = base64.b64encode(b"hello").decode()
+    result = svc.upload_file_to_node("lab-pi-01", "/tmp/test", valid_b64, "0644")
+
+    assert result == {"status": "written", "path": "/tmp/test"}
+    mock_conn.upload_file.assert_called_once_with("/tmp/test", valid_b64, "0644")
+
+
+def test_upload_file_to_node_disabled_node_returns_error():
+    """upload_file_to_node() returns node_disabled error for a disabled node."""
+    import base64
+    from unittest.mock import MagicMock
+
+    registry = NodeRegistry()
+    cfg = NodeConfig(
+        name="lab-pi-01",
+        mode="direct",
+        enabled=False,
+        host="192.168.1.10",
+        port=22,
+        user="pi",
+        id_file=None,
+    )
+    registry.add(cfg)
+
+    pool = MagicMock()
+    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake())
+
+    valid_b64 = base64.b64encode(b"hello").decode()
+    result = svc.upload_file_to_node("lab-pi-01", "/tmp/test", valid_b64, "0644")
+    assert result == {"error": "node_disabled", "name": "lab-pi-01"}
+
+
+def test_download_file_from_node_delegates_to_connection():
+    """download_file_from_node() calls connection.download_file() and returns result."""
+    import base64
+
+    svc, mock_conn = _make_service_with_open_connection()
+    expected = {"status": "ok", "path": "/tmp/test", "data_b64": "abc"}
+    mock_conn.download_file.return_value = expected
+
+    result = svc.download_file_from_node("lab-pi-01", "/tmp/test")
+
+    assert result == expected
+    mock_conn.download_file.assert_called_once_with("/tmp/test")
+
+
+def test_download_file_from_node_disabled_node_returns_error():
+    """download_file_from_node() returns node_disabled error for a disabled node."""
+    from unittest.mock import MagicMock
+
+    registry = NodeRegistry()
+    cfg = NodeConfig(
+        name="lab-pi-01",
+        mode="direct",
+        enabled=False,
+        host="192.168.1.10",
+        port=22,
+        user="pi",
+        id_file=None,
+    )
+    registry.add(cfg)
+
+    pool = MagicMock()
+    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake())
+
+    result = svc.download_file_from_node("lab-pi-01", "/tmp/test")
+    assert result == {"error": "node_disabled", "name": "lab-pi-01"}

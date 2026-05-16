@@ -100,7 +100,8 @@ class BaseConnection:
                 self._health_timer.cancel()
                 self._health_timer = None
 
-    def execute(self, command: str) -> CommandResult:
+    def execute(self, command: str, timeout: int | float | None = None) -> CommandResult:
+        import threading as _threading
         from datetime import datetime, timezone
         with self._lock:
             if not self._ssh:
@@ -109,12 +110,40 @@ class BaseConnection:
             started_at = datetime.now(timezone.utc)
             logging.info(f"💻 Executing on {self.name}: {command}")
             stdin, stdout, stderr = self._ssh.exec_command(command)
-            exit_code = stdout.channel.recv_exit_status()
+
+            # recv_exit_status() internally waits on a threading.Event and ignores
+            # channel.settimeout(), so we enforce the deadline via a worker thread.
+            exit_code_holder: list = [None]
+            exc_holder: list = [None]
+
+            def _wait():
+                try:
+                    exit_code_holder[0] = stdout.channel.recv_exit_status()
+                except Exception as e:
+                    exc_holder[0] = e
+
+            t = _threading.Thread(target=_wait, daemon=True)
+            t.start()
+            t.join(timeout)
+
+            if t.is_alive():
+                # Close the channel to unblock the waiting thread
+                try:
+                    stdout.channel.close()
+                except Exception:
+                    pass
+                raise TimeoutError(
+                    f"Command timed out after {timeout}s on {self.name}: {command}"
+                )
+
+            if exc_holder[0] is not None:
+                raise exc_holder[0]
+
             ended_at = datetime.now(timezone.utc)
 
             result = CommandResult(
                 command=command,
-                exit_code=exit_code,
+                exit_code=exit_code_holder[0],
                 stdout=stdout.read().decode(),
                 stderr=stderr.read().decode(),
                 started_at=started_at,
@@ -122,6 +151,92 @@ class BaseConnection:
             )
             self._history.append(result)
             return result
+
+    def upload_file(self, remote_path: str, data_b64: str, mode: str = "0644") -> dict:
+        """Upload a base64-encoded file to the remote node via SFTP.
+
+        Args:
+            remote_path: Absolute path on the remote node.
+            data_b64:    Base64-encoded file content.
+            mode:        Unix permission mode string (e.g. "0644"). Default "0644".
+
+        Returns:
+            {"status": "written", "path": remote_path} on success.
+            {"error": "invalid_base64", "path": remote_path} on bad base64 input.
+            {"error": "invalid_mode", "path": remote_path, "mode": mode} on bad mode string.
+        """
+        import base64
+        import binascii
+        import io
+        import re
+
+        # Validate base64
+        try:
+            data = base64.b64decode(data_b64, validate=True)
+        except (binascii.Error, ValueError):
+            return {"error": "invalid_base64", "path": remote_path}
+
+        # Validate mode (3 or 4 octal digits)
+        if not re.match(r'^[0-7]{3,4}$', mode):
+            return {"error": "invalid_mode", "path": remote_path, "mode": mode}
+
+        with self._lock:
+            if not self._ssh:
+                raise RuntimeError("Connection is not open.")
+            sftp = self._ssh.open_sftp()
+            try:
+                sftp.putfo(io.BytesIO(data), remote_path)
+                sftp.chmod(remote_path, int(mode, 8))
+            finally:
+                sftp.close()
+
+        return {"status": "written", "path": remote_path}
+
+    def download_file(self, remote_path: str) -> dict:
+        """Download a file from the remote node via SFTP, returning base64-encoded content.
+
+        Args:
+            remote_path: Absolute path on the remote node.
+
+        Returns:
+            {"status": "ok", "path": remote_path, "data_b64": "<b64>"} on success.
+            {"error": "file_too_large", "path": remote_path, "size_bytes": n, "limit_bytes": 10485760}
+                if file exceeds 10 MB (checked via sftp.stat before download).
+            {"error": "file_not_found", "path": remote_path} on IOError/FileNotFoundError.
+        """
+        import base64
+        import io
+
+        _LIMIT = 10 * 1024 * 1024  # 10 MB
+
+        with self._lock:
+            if not self._ssh:
+                raise RuntimeError("Connection is not open.")
+            sftp = self._ssh.open_sftp()
+            try:
+                # Size guard via stat (best-effort — proceed if stat fails)
+                try:
+                    st = sftp.stat(remote_path)
+                    if st.st_size > _LIMIT:
+                        return {
+                            "error": "file_too_large",
+                            "path": remote_path,
+                            "size_bytes": st.st_size,
+                            "limit_bytes": _LIMIT,
+                        }
+                except IOError:
+                    pass  # stat unavailable — proceed best-effort
+
+                buf = io.BytesIO()
+                try:
+                    sftp.getfo(remote_path, buf)
+                except (IOError, FileNotFoundError):
+                    return {"error": "file_not_found", "path": remote_path}
+            finally:
+                sftp.close()
+
+        data_b64 = base64.b64encode(buf.getvalue()).decode()
+        return {"status": "ok", "path": remote_path, "data_b64": data_b64}
 
     def describe(self):
         return {

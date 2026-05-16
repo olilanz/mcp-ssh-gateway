@@ -11,6 +11,7 @@ import logging
 import threading
 import time
 import subprocess
+from typing import Optional
 from .connection import Connection
 from .connection import ConnectionState
 
@@ -226,3 +227,46 @@ class ConnectionPool:
                     self._disabled_names.discard(name)
                     return
         logging.warning(f"⚠️ remove_connection: connection '{name}' not found.")
+
+    def get_connection(self, name: str) -> Optional[Connection]:
+        """Thread-safe lookup of a connection by name.
+
+        Returns the Connection object if found, or None if the name is not in the pool.
+        Does not check or change connection state.
+        """
+        with self.lock:
+            for conn in self.connections:
+                if conn.name == name:
+                    return conn
+        return None
+
+    def ensure_connection_open(self, name: str) -> Optional[Connection]:
+        """Return an open connection for name, re-opening if currently closed/broken.
+
+        Rules:
+        - Returns None ONLY if name is not in pool (caller should use get_connection first
+          to distinguish "not in pool" from "in pool but could not open")
+        - Opens the connection if state is CLOSED or BROKEN
+        - Returns the Connection if already open, or if open() succeeds
+        - Returns None if name IS in pool but open() fails (caller sees connection_not_open)
+        - Does NOT check whether the node is enabled — NodeService owns that guard
+        - Does NOT raise — logs errors on open failure, returns None on failure
+        """
+        conn = self.get_connection(name)
+        if conn is None:
+            return None
+
+        if conn.get_state() == ConnectionState.OPEN:
+            return conn
+
+        try:
+            conn.open()
+        except Exception as e:
+            logging.error(
+                f"❌ ensure_connection_open: failed to open '{name}': {e}",
+                exc_info=True,
+            )
+
+        if conn.get_state() == ConnectionState.OPEN:
+            return conn
+        return None

@@ -15,10 +15,21 @@ The pool_state field is always freshly derived from the pool at call time.
 """
 
 from dataclasses import replace
+from dataclasses import dataclass as _dataclass
 from typing import Optional
 
 from agent.connectionpool.pool import ConnectionPool
 from agent.nodes.registry import NodeRegistry
+
+
+@_dataclass
+class _NodeReady:
+    """Internal result from ensure_node_ready. Never returned through MCP.
+
+    Contains an open Connection instance ready for execution.
+    Callers check isinstance(result, dict) to detect error — if not dict, it's _NodeReady.
+    """
+    connection: object
 
 
 class NodeService:
@@ -39,9 +50,12 @@ class NodeService:
       - add_node(name, host, port, user, password, mode)
     """
 
-    def __init__(self, registry: NodeRegistry, pool: ConnectionPool) -> None:
+    def __init__(self, registry: NodeRegistry, pool: ConnectionPool, handshake_service=None) -> None:
         self._registry = registry
         self._pool = pool
+        # Import here to avoid circular imports at module level if needed
+        from agent.nodes.handshake import NodeHandshakeService
+        self._handshake_service = handshake_service or NodeHandshakeService()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -243,3 +257,114 @@ class NodeService:
             "name": name,
             "reason": "password-based bootstrap is not implemented in this slice",
         }
+
+    # ------------------------------------------------------------------
+    # Node readiness (execution pre-flight)
+    # ------------------------------------------------------------------
+
+    def ensure_node_ready(self, name: str):
+        """Verify node is known, enabled, reachable, and has handshake facts.
+
+        Returns:
+            _NodeReady(connection=...) on success — INTERNAL ONLY, never returned via MCP.
+            {"error": "node not found",      "name": name} if not in registry.
+            {"error": "node_disabled",       "name": name} if disabled.
+            {"error": "not_in_pool",         "name": name} if not in pool.
+            {"error": "connection_not_open", "name": name} if pool cannot open it.
+        """
+        # 1. Registry guard
+        if not self._registry.exists(name):
+            return {"error": "node not found", "name": name}
+        config, cache = self._registry.get(name)
+
+        # 2. Enabled guard
+        if not config.enabled:
+            return {"error": "node_disabled", "name": name}
+
+        # 3. Pool presence guard (distinguishes not_in_pool from connection_not_open)
+        conn = self._pool.get_connection(name)
+        if conn is None:
+            return {"error": "not_in_pool", "name": name}
+
+        # 4. Open guard
+        conn = self._pool.ensure_connection_open(name)
+        if conn is None:
+            return {"error": "connection_not_open", "name": name}
+
+        # 5. Handshake (if cache is empty)
+        if not cache.facts:
+            facts = self._handshake_service.run(conn)
+            if facts:
+                from datetime import datetime, timezone
+                from agent.nodes.models import NodeInfoCache
+                new_cache = NodeInfoCache(
+                    facts=facts,
+                    collected_at=datetime.now(timezone.utc).isoformat(),
+                )
+                self._registry.update_cache(name, new_cache)
+
+        return _NodeReady(connection=conn)
+
+    # ------------------------------------------------------------------
+    # Execution APIs (Phase 5)
+    # ------------------------------------------------------------------
+
+    def run_command_on_node(self, name: str, command: str, timeout: int = 30) -> dict:
+        """Execute a command on a named node.
+
+        Args:
+            name:    Registered node name.
+            command: Shell command string.
+            timeout: Maximum seconds to wait for execution. Default 30.
+
+        Returns:
+            CommandResult.to_dict() on success.
+            {"error": "...", "name": name} on guard failure or timeout.
+        """
+        ready = self.ensure_node_ready(name)
+        if isinstance(ready, dict):
+            return ready
+
+        try:
+            result = ready.connection.execute(command, timeout=timeout)
+            return result.to_dict()
+        except TimeoutError:
+            return {"error": "timeout", "name": name, "command": command}
+
+    # ------------------------------------------------------------------
+    # File transfer APIs (Phase 6)
+    # ------------------------------------------------------------------
+
+    def upload_file_to_node(self, name: str, remote_path: str, data_b64: str, mode: str = "0644") -> dict:
+        """Upload a base64-encoded file to a named node.
+
+        Args:
+            name:        Registered node name.
+            remote_path: Absolute path on the remote node.
+            data_b64:    Base64-encoded file content.
+            mode:        Unix permission mode string. Default "0644".
+
+        Returns:
+            {"status": "written", "path": remote_path} on success.
+            Error dict on guard failure or upload error.
+        """
+        ready = self.ensure_node_ready(name)
+        if isinstance(ready, dict):
+            return ready
+        return ready.connection.upload_file(remote_path, data_b64, mode)
+
+    def download_file_from_node(self, name: str, remote_path: str) -> dict:
+        """Download a file from a named node, returning base64-encoded content.
+
+        Args:
+            name:        Registered node name.
+            remote_path: Absolute path on the remote node.
+
+        Returns:
+            {"status": "ok", "path": remote_path, "data_b64": "..."} on success.
+            Error dict on guard failure or download error.
+        """
+        ready = self.ensure_node_ready(name)
+        if isinstance(ready, dict):
+            return ready
+        return ready.connection.download_file(remote_path)
