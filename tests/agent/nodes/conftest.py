@@ -63,11 +63,12 @@ def make_mock_pool(connections=None):
     return pool
 
 
-def make_service(nodes=None, pool_connections=None):
+def make_service(nodes=None, pool_connections=None, identity_service=None):
     """Build a NodeService with pre-populated registry and mock pool.
 
     nodes: list of (name, mode, enabled) tuples; defaults to one direct/enabled node.
     pool_connections: list of mock connection objects; defaults to empty list.
+    identity_service: optional mock AgentIdentityService (defaults to None).
     """
     from agent.connectionpool.connection import ConnectionState
 
@@ -87,4 +88,14 @@ def make_service(nodes=None, pool_connections=None):
         registry.add(cfg)
 
     pool = make_mock_pool(pool_connections if pool_connections is not None else [])
-    return NodeService(registry=registry, pool=pool)
+    return NodeService(registry=registry, pool=pool, agent_identity_service=identity_service)
+
+
+def make_mock_identity_service(public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 agent@test"):
+    """Build a mock AgentIdentityService whose get_identity() returns a mock identity."""
+    from unittest.mock import MagicMock
+    identity = MagicMock()
+    identity.public_key = public_key
+    svc = MagicMock()
+    svc.get_identity.return_value = identity
+    return svc

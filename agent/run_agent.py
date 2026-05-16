@@ -67,7 +67,7 @@ def run_agent(
         )
         registry.add(cfg)
 
-    node_service = NodeService(registry=registry, pool=pool)
+    node_service = NodeService(registry=registry, pool=pool, agent_identity_service=agent_identity_service)
 
     # Start MCP loop (blocking)
     mcp = FastMCP(name="mcp-ssh-gateway", host=host, port=port, stateless_http=True, json_response=True)

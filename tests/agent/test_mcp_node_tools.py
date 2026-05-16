@@ -95,22 +95,28 @@ def test_get_status_not_registered():
     )
 
 
-def test_run_command_still_registered():
-    """run_command must remain registered (unrelated execution primitive)."""
+def test_run_command_tool_not_registered():
+    """Legacy local run_command must not appear in registered MCP tools."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
     mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
-    assert "run_command" in _tool_names(mcp)
+    assert "run_command" not in _tool_names(mcp), (
+        "run_command must be absent — it executes commands on the gateway container itself, "
+        "not on a managed node, and is a security footgun"
+    )
 
 
-def test_upload_file_still_registered():
-    """upload_file must remain registered (unrelated execution primitive)."""
+def test_upload_file_tool_not_registered():
+    """Legacy local upload_file must not appear in registered MCP tools."""
     mcp = make_test_mcp()
     svc = make_mock_node_service()
     mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
-    assert "upload_file" in _tool_names(mcp)
+    assert "upload_file" not in _tool_names(mcp), (
+        "upload_file must be absent — it writes files on the gateway container itself, "
+        "not on a managed node, and is a security footgun"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -150,10 +156,10 @@ def test_add_node_delegates_to_service():
     mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
     fn = _get_tool_fn(mcp, "add_node")
-    result = fn(name="node-b", host="192.168.1.5", port=22, user="pi", password="secret", mode="direct")
+    result = fn(name="node-b", host="192.168.1.5", port=22, username="pi", password="secret", mode="direct")
 
     svc.add_node.assert_called_once_with(
-        name="node-b", host="192.168.1.5", port=22, user="pi", password="secret", mode="direct"
+        name="node-b", host="192.168.1.5", port=22, username="pi", password="secret", mode="direct"
     )
     assert result["name"] == "test"
 

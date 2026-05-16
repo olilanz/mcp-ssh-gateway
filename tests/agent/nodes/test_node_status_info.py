@@ -188,26 +188,113 @@ def test_get_node_info_refresh_false_no_ssh():
     conn.open.assert_not_called()
 
 
-def test_get_node_info_refresh_true_stubbed():
-    """refresh=True returns same node data plus refresh_note field."""
+def test_refresh_without_name_returns_error():
+    """get_node_info(name=None, refresh=True) returns refresh_target_required error."""
+    svc = make_service()
+    result = svc.get_node_info(name=None, refresh=True)
+    assert result.get("error") == "refresh_target_required"
+    assert "reason" in result
+
+
+def test_refresh_disabled_node_returns_error():
+    """get_node_info(name=..., refresh=True) on a disabled node returns node_disabled error."""
+    from unittest.mock import MagicMock
+
+    nodes = [("node-a", "direct", False)]  # disabled
+    svc = make_service(nodes=nodes)
+    result = svc.get_node_info(name="node-a", refresh=True)
+    assert result == {"error": "node_disabled", "name": "node-a"}
+
+
+def test_refresh_not_in_pool_returns_error():
+    """get_node_info(name=..., refresh=True) when pool.get_connection() is None returns not_in_pool."""
+    from unittest.mock import MagicMock
+
+    nodes = [("node-a", "direct", True)]
+    svc = make_service(nodes=nodes, pool_connections=[])
+    # Pool mock by default returns not_in_pool for get_connection_state,
+    # but get_connection() is a separate method — make it return None explicitly
+    svc._pool.get_connection.return_value = None
+
+    result = svc.get_node_info(name="node-a", refresh=True)
+    assert result == {"error": "not_in_pool", "name": "node-a"}
+
+
+def test_refresh_connection_not_open_returns_error():
+    """get_node_info(refresh=True): get_connection() returns object but ensure_connection_open() returns None."""
+    from unittest.mock import MagicMock
     from agent.connectionpool.connection import ConnectionState
 
-    conn = make_mock_connection("lab-pi-01", ConnectionState.OPEN)
-    svc = make_service(pool_connections=[conn])
+    nodes = [("node-a", "direct", True)]
+    conn = make_mock_connection("node-a", ConnectionState.CLOSED)
+    svc = make_service(nodes=nodes, pool_connections=[conn])
 
-    result_no_refresh = svc.get_node_info(refresh=False)
-    result_with_refresh = svc.get_node_info(refresh=True)
+    # get_connection returns a truthy mock object
+    mock_conn_obj = MagicMock()
+    svc._pool.get_connection.return_value = mock_conn_obj
+    # ensure_connection_open returns None (cannot open)
+    svc._pool.ensure_connection_open.return_value = None
 
-    # Both must have nodes
-    assert "nodes" in result_with_refresh
-    assert result_with_refresh["nodes"] == result_no_refresh["nodes"]
+    result = svc.get_node_info(name="node-a", refresh=True)
+    assert result == {"error": "connection_not_open", "name": "node-a"}
 
-    # Stub note must be present
-    assert "refresh_note" in result_with_refresh
-    assert result_with_refresh["refresh_note"] == "live refresh not yet implemented"
 
-    # No refresh_note in the non-refresh result
-    assert "refresh_note" not in result_no_refresh
+def test_refresh_handshake_success_updates_cache():
+    """get_node_info(refresh=True): successful handshake updates cache and returns refreshed list."""
+    from unittest.mock import MagicMock, patch
+    from agent.connectionpool.connection import ConnectionState
+
+    nodes = [("node-a", "direct", True)]
+    conn = make_mock_connection("node-a", ConnectionState.OPEN)
+    svc = make_service(nodes=nodes, pool_connections=[conn])
+
+    mock_conn = MagicMock()
+    svc._pool.get_connection.return_value = mock_conn
+    svc._pool.ensure_connection_open.return_value = mock_conn
+
+    fake_facts = {
+        "hostname": {"value": "rpi-node-a", "source": "handshake", "collected_at": ""},
+    }
+    mock_handshake = MagicMock()
+    mock_handshake.run.return_value = fake_facts
+    svc._handshake_service = mock_handshake
+
+    result = svc.get_node_info(name="node-a", refresh=True)
+
+    assert result.get("error") is None
+    assert result["refreshed"] == ["node-a"]
+    assert result["refresh_failed"] == {}
+    assert len(result["nodes"]) == 1
+    assert result["nodes"][0]["name"] == "node-a"
+    assert "info" in result["nodes"][0]
+    # Verify registry.update_cache was called (cache updated with new facts)
+    assert result["nodes"][0]["info"] == fake_facts
+
+
+def test_refresh_handshake_empty_returns_stale_with_marker():
+    """get_node_info(refresh=True): handshake returns {} → refresh_failed marker, stale cache, refreshed=[]."""
+    from unittest.mock import MagicMock
+    from agent.connectionpool.connection import ConnectionState
+
+    nodes = [("node-a", "direct", True)]
+    conn = make_mock_connection("node-a", ConnectionState.OPEN)
+    svc = make_service(nodes=nodes, pool_connections=[conn])
+
+    mock_conn = MagicMock()
+    svc._pool.get_connection.return_value = mock_conn
+    svc._pool.ensure_connection_open.return_value = mock_conn
+
+    mock_handshake = MagicMock()
+    mock_handshake.run.return_value = {}
+    svc._handshake_service = mock_handshake
+
+    result = svc.get_node_info(name="node-a", refresh=True)
+
+    assert result.get("error") is None
+    assert result["refreshed"] == []
+    assert result["refresh_failed"] == {"node-a": "handshake_returned_empty"}
+    assert len(result["nodes"]) == 1
+    assert result["nodes"][0]["name"] == "node-a"
 
 
 def test_get_node_info_info_contains_cache_facts():

@@ -40,6 +40,45 @@ The goal is:
 - Decide whether docs/rules need updates.
 - Record findings in the task report.
 
+## Current MCP Tool Surface
+
+### Tools confirmed present
+
+The following tools are currently registered and active:
+
+```
+get_node_status          — list all configured nodes and their connection state
+get_node_info            — get cached or refreshed node facts for a named node
+get_agent_public_key     — retrieve the agent's SSH public key for node onboarding
+add_node                 — onboard a new node via password bootstrap
+remove_node              — remove a node from the registry
+enable_node              — enable a disabled node (with optional validate=True probe)
+disable_node             — disable an active node
+run_command_on_node      — run a shell command on a named node
+upload_file_to_node      — upload a file to a named node via SFTP
+download_file_from_node  — download a file from a named node via SFTP
+```
+
+### Tools confirmed absent
+
+The following tools were intentionally removed (Phase 1 of the direct-node-completion-slice):
+
+```
+run_command    — REMOVED: executed commands on the gateway host, not nodes (shell=True, security risk)
+upload_file    — REMOVED: wrote files to the gateway filesystem, not nodes
+```
+
+These tools are **not** present in the registered MCP tool list. Any integration or validation that references `run_command` or `upload_file` as gateway tools is stale and should be updated.
+
+### Stale tool names (do not use)
+
+The following names have never existed in the current codebase or were removed in earlier iterations:
+
+```
+get_status        — stale, replaced by get_node_status
+get_device_info   — stale, replaced by get_node_info
+```
+
 ## Standard smoke test
 
 A minimal repeatable smoke test to run after every gateway change.
@@ -65,8 +104,13 @@ A minimal repeatable smoke test to run after every gateway change.
 5. Invoke (read-only):
    - `get_node_status`
    - `get_node_info`
+   - `get_agent_public_key`
 
-6. Capture:
+6. Confirm absent (must NOT appear in tool list):
+   - `run_command`
+   - `upload_file`
+
+7. Capture:
    - startup command
    - endpoint
    - tools observed
@@ -75,9 +119,9 @@ A minimal repeatable smoke test to run after every gateway change.
    - relevant logs
    - pass/fail conclusion
 
-## Task-focused validation for the node management API slice
+## Task-focused validation for the direct-node-completion slice
 
-After the standard smoke test, validate the mutating node tools using safe synthetic test data. These calls are not part of the standard smoke test — they are task-scoped validation for the node management API slice.
+After the standard smoke test, validate the mutating node tools using safe synthetic test data. These calls are not part of the standard smoke test — they are task-scoped validation for the current slice.
 
 **Validate request/response shape only. Use synthetic names, hosts, and users. No real credentials. No real network targets.**
 
@@ -85,16 +129,23 @@ Tools to validate:
 
 ```
 add_node      — validate request/response shape; use synthetic name/host/user (no real credentials)
-                expected: {"status": "bootstrap_not_implemented", "name": ..., "reason": ...}
+                expected stub response: {"error": "unsupported_mode"} for mode="tunnel",
+                or {"error": "password_connect_failed"} for unreachable host
 
 remove_node   — validate against a test node added in the session
                 expected: {"status": "removed", "name": ...}
 
 enable_node   — validate state transition (node enabled → disabled → enabled)
                 expected: {"status": "enabled", "name": ...}
+                with validate=True: {"status": "enabled", "name": ..., "validated": true/false}
 
 disable_node  — validate state transition (node enabled → disabled)
                 expected: {"status": "disabled", "name": ...}
+
+get_node_info — validate refresh behavior
+                with refresh=False: cached facts returned (or empty)
+                with refresh=True and name=None: {"error": "refresh_target_required"}
+                with refresh=True and named node: {"nodes": [...], "refreshed": [...]}
 ```
 
 Example synthetic data for `add_node`:
@@ -110,7 +161,7 @@ Example synthetic data for `add_node`:
 }
 ```
 
-**Note on `add_node` current behavior:** bootstrap is not yet implemented. `add_node` returns `bootstrap_not_implemented` and does **not** add the node to the registry. Therefore `disable_node`, `enable_node`, and `remove_node` cannot be tested against a newly added node in this slice. Use any node present in the configured registry instead.
+**Note on `add_node` current behavior:** bootstrap is implemented. `add_node` with an unreachable host will return `{"error": "password_connect_failed", ...}`. Use this to confirm the error shape without requiring a real target.
 
 ## Task-focused exploratory validation
 

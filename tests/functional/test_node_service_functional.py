@@ -120,3 +120,39 @@ def test_disable_node_closes_connection(node_service_and_name):
         f"Expected pool_state != 'open' after disable_node, got '{nodes[name]['pool_state']}'"
     )
     assert nodes[name]["enabled"] is False
+
+
+@pytest.mark.functional
+@pytest.mark.requires_sshd
+@pytest.mark.filterwarnings("ignore::ResourceWarning")
+def test_get_node_info_refresh_updates_cache(node_service_and_name):
+    """refresh=True on an open named node returns refreshed facts and updates cache."""
+    service, pool, name = node_service_and_name
+    _wait_for_open(pool, name)
+
+    result = service.get_node_info(name=name, refresh=True)
+    assert result.get("error") is None
+    assert name in result.get("refreshed", [])
+    assert len(result.get("nodes", [])) == 1
+    node = result["nodes"][0]
+    assert node["name"] == name
+    assert "info" in node
+    # handshake should have populated at least hostname or current_user
+    assert node["info"].get("hostname") or node["info"].get("current_user")
+
+
+@pytest.mark.functional
+@pytest.mark.requires_sshd
+@pytest.mark.filterwarnings("ignore::ResourceWarning")
+def test_enable_node_validate_true_succeeds(node_service_and_name):
+    """enable_node(validate=True) on an open node returns validated=True."""
+    service, pool, name = node_service_and_name
+    # First disable the node
+    service.disable_node(name)
+    # Wait briefly for the pool to reflect the disabled state
+    time.sleep(0.1)
+    # Then re-enable with validation — pool.ensure_connection_open will open it
+    result = service.enable_node(name, validate=True)
+    assert result.get("status") == "enabled"
+    assert result.get("validated") is True
+    assert result.get("error") is None

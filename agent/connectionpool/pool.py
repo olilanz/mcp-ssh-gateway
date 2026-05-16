@@ -240,6 +240,18 @@ class ConnectionPool:
                     return conn
         return None
 
+    def add_connection(self, config) -> None:
+        """Add a new connection to the pool and clear any disabled state for the name.
+
+        Called after a successful bootstrap so the new connection is immediately
+        eligible for the monitor and for ensure_connection_open().
+        Thread-safe.
+        """
+        with self.lock:
+            self._disabled_names.discard(config.name)
+            conn = Connection(config)
+            self.connections.append(conn)
+
     def ensure_connection_open(self, name: str) -> Optional[Connection]:
         """Return an open connection for name, re-opening if currently closed/broken.
 

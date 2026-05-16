@@ -17,7 +17,7 @@ class ConnectionConfigError(Exception):
 class ConnectionConfig:
     name: str
     user: str
-    id_file: str
+    id_file: Optional[str]
     mode: str  # either "direct" or "tunnel"
     port: int
     host: Optional[str]  # required for 'direct', None for 'tunnel'

@@ -11,19 +11,16 @@ SSH is the transport. The product boundary is broader: declared connections, cap
 ```text
 LLM / MCP client
         ↓
-FastMCP tool surface
+FastMCP tool surface (mcp_handlers.py)
         ↓
-mcp-ssh-gateway
-    ├── connection registry
-    ├── capability discovery
-    ├── capability cache
-    ├── execution logging
-    ├── task routing support
-    └── transport orchestration
-            ├── direct SSH
-            └── reverse tunnel SSH
+NodeService
+    ├── NodeRegistry
+    ├── ConnectionPool
+    │       └── Connection (DirectConnection / TunnelConnection)
+    ├── NodeHandshakeService
+    └── AgentIdentityService (add_node bootstrap)
                     ↓
-          remote capability environments
+          remote node environments
 ```
 
 The gateway is the boundary between orchestration systems and real environments.
@@ -212,13 +209,14 @@ The following table describes each layer's responsibility in the current impleme
 
 | Layer | Responsibility |
 |---|---|
-| `resources/node/handshake.sh` | Node-side resource scripts (POSIX sh, no deps) |
-| `NodeHandshakeService` | Node semantics: loads script, executes over SSH, parses facts |
-| `NodeService` | Node guards + readiness orchestration + execution delegation |
-| `ConnectionPool` | Transport lifecycle + connection lookup/open |
-| `Connection` / `BaseConnection` | SSH execution (with timeout), SFTP upload/download |
-| `NodeInfoCache` / `NodeRegistry` | Stores handshake facts and node config |
-| `mcp_handlers.py` | Delegates to service layer only — no logic |
+| `mcp_handlers.py` | MCP tool surface — delegates to service layer only, no logic |
+| `NodeService` | Business logic: node guards, readiness orchestration, execution delegation |
+| `AgentIdentityService` | Agent SSH keypair management; public key retrieval and password-bootstrap install |
+| `NodeRegistry` | In-memory, thread-safe store of `NodeConfig` and `NodeInfoCache` |
+| `ConnectionPool` | Transport lifecycle: connection lookup, open, enable, disable, remove |
+| `Connection` / `BaseConnection` | SSH command execution (with timeout), SFTP upload/download |
+| `NodeHandshakeService` | Loads `resources/node/handshake.sh`, executes over SSH, parses `key=value` facts |
+| `resources/node/handshake.sh` | Node-side POSIX sh script — no external dependencies |
 
 ## Error Contract
 
@@ -240,30 +238,24 @@ MCP tool error responses use a stable set of error keys. The following keys are 
 
 Current code implements:
 
-- MCP startup and tool registration foundations,
-- static connection configuration,
-- connection pool lifecycle scaffolding,
-- direct SSH connectivity using Paramiko,
-- reverse tunnel probing through already exposed local ports,
-- structured command execution results,
-- node-oriented MCP API surface (`get_node_status`, `get_node_info`, `add_node`, `remove_node`, `enable_node`, `disable_node`),
-- `NodeRegistry` (in-memory, thread-safe; stores `NodeConfig` and `NodeInfoCache`),
-- `NodeService` (business logic layer over registry and pool; composes `NodeRuntimeState` at call time),
-- `ConnectionPool` disable/remove/enable seam (`disable_connection`, `enable_connection`, `remove_connection`),
-- `ConnectionPool.get_connection(name)` — thread-safe lookup, returns `Connection | None`,
-- `ConnectionPool.ensure_connection_open(name)` — re-opens if closed or broken, returns `Connection | None`,
-- node execution MCP tools (`run_command_on_node`, `upload_file_to_node`, `download_file_from_node`),
-- `NodeService.ensure_node_ready()` — five-step readiness gate (registry exists → enabled → pool.get_connection → ensure_connection_open → handshake if cache empty),
-- `NodeHandshakeService` — loads `resources/node/handshake.sh`, executes via `sh -s`, parses `key=value` facts into `NodeInfoCache`,
-- and `resources/node/handshake.sh` — POSIX sh script collecting node facts (`hostname`, `kernel_name`, `kernel_release`, `architecture`, `current_user`, `shell`, `os_pretty_name`, `collected_at`).
+- full node-lifecycle MCP API surface:
+  - `get_node_status`, `get_node_info`, `get_agent_public_key`
+  - `add_node`, `enable_node`, `disable_node`, `remove_node`
+  - `run_command_on_node`, `upload_file_to_node`, `download_file_from_node`
+- `AgentIdentityService` — persistent ed25519 keypair; public key retrieval; password-bootstrap install for `add_node`
+- `NodeRegistry` — in-memory, thread-safe; stores `NodeConfig` and `NodeInfoCache`
+- `NodeService` — business logic layer; composes `NodeRuntimeState` at call time; `ensure_node_ready()` readiness gate
+- `ConnectionPool` — transport lifecycle: `get_connection`, `ensure_connection_open`, `enable_connection`, `disable_connection`, `remove_connection`
+- `Connection` / `BaseConnection` — SSH command execution with timeout, SFTP upload/download
+- `NodeHandshakeService` — loads `resources/node/handshake.sh`, executes via `sh -s`, parses `key=value` facts into `NodeInfoCache`
+- `resources/node/handshake.sh` — POSIX sh script collecting: `hostname`, `kernel_name`, `kernel_release`, `architecture`, `current_user`, `shell`, `os_pretty_name`, `collected_at`
+- direct SSH connectivity via Paramiko; reverse tunnel probing through already-exposed local ports
 
 Current code is evolving around:
 
-- capability discovery,
-- normalized capability cache,
+- capability discovery and normalized capability cache,
 - execution history,
-- task routing support,
-- and onboarding workflows.
+- and task routing support.
 
 Current code does not yet implement:
 

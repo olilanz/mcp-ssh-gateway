@@ -307,3 +307,36 @@ def test_ensure_connection_open_calls_open_when_closed():
     conn.open.assert_called_once()
     assert result is not None
     assert result.name == "mu"
+
+
+# ---------------------------------------------------------------------------
+# add_connection tests (Phase 4)
+# ---------------------------------------------------------------------------
+
+def test_add_connection_clears_disabled_state():
+    """pool.add_connection() must discard from _disabled_names so the monitor reconnects."""
+    pool = _make_pool_with_fake_connections([])
+    # Manually mark "nu" as disabled (simulating a prior disable_connection call)
+    pool._disabled_names.add("nu")
+
+    # Build a minimal ConnectionConfig for the new connection
+    config = ConnectionConfig(
+        name="nu",
+        host="10.0.0.5",
+        port=22,
+        user="pi",
+        id_file=None,
+        mode="direct",
+    )
+
+    # Patch Connection so no real SSH is attempted
+    with patch("agent.connectionpool.pool.Connection") as mock_conn_cls:
+        fake_conn = MagicMock()
+        fake_conn.name = "nu"
+        mock_conn_cls.return_value = fake_conn
+        pool.add_connection(config)
+
+    # Name must no longer be in _disabled_names
+    assert "nu" not in pool._disabled_names
+    # Connection must have been appended to pool.connections
+    assert any(c.name == "nu" for c in pool.connections)

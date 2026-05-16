@@ -26,21 +26,34 @@ LLM / MCP client
 FastMCP tool surface
         ↓
 mcp-ssh-gateway
-    ├── connection registry
-    ├── capability discovery
-    ├── capability cache
+    ├── node registry
+    ├── connection pool
     ├── execution logging
-    ├── task routing support
     └── transport orchestration
             ├── direct SSH
             └── reverse tunnel SSH
                     ↓
-          remote capability environments
+          remote node environments
 ```
 
-Each configured connection represents a trusted operational arm into a remote environment. The gateway discovers what each environment can do, records normalized capabilities, and exposes those capabilities back through MCP tools.
+Each configured node represents a trusted operational arm into a remote environment. The gateway manages SSH identities, connections, and execution, and exposes those capabilities back through MCP tools.
 
-This allows an LLM to inspect available environments, understand which tools and hardware exist, select the most appropriate machine for a task, and coordinate workflows across multiple remote systems.
+This allows an LLM to inspect available nodes, select the most appropriate machine for a task, and coordinate workflows across multiple remote systems.
+
+## MCP Tools
+
+| Tool | Description |
+|---|---|
+| `get_node_status` | List all nodes and their connection states |
+| `get_node_info` | Get detailed node facts (use `refresh=true` for explicit manual refresh) |
+| `get_agent_public_key` | Retrieve the agent's SSH public key for node enrollment |
+| `add_node` | Enroll a new direct-mode node via password bootstrap |
+| `enable_node` | Enable a node (use `validate=true` to probe connectivity) |
+| `disable_node` | Disable a node and close its connection |
+| `remove_node` | Remove a node from the pool and registry |
+| `run_command_on_node` | Execute a command on a named node |
+| `upload_file_to_node` | Upload a file to a named node via SFTP |
+| `download_file_from_node` | Download a file from a named node via SFTP |
 
 ## Connection Modes
 
@@ -68,14 +81,6 @@ The current configuration value is still:
 
 The documentation uses “reverse tunnel mode” to describe the operational model clearly.
 
-## Capability Discovery
-
-The gateway is designed to discover and normalize information about each remote environment.
-
-Examples include operating system, architecture, hostname, users, network information, installed interpreters, installed tooling, GPU availability, memory, storage, and environment-specific capabilities.
-
-Discovered capabilities are cached and exposed back to the LLM through MCP tools. This allows the LLM to reason about where required tools are available, where hardware acceleration exists, which system has useful network locality, and how multiple systems can collaborate.
-
 ## Runbooks and Skills
 
 The gateway is intended to work together with runbooks, skills, procedures, and higher-level orchestration systems such as Open WebUI, n8n, OpenClaw, or other MCP-compatible clients.
@@ -86,32 +91,29 @@ Paired with runbooks and skills, an LLM can plan larger workflows and execute th
 
 ## Current Implementation Status
 
-The project is in an early implementation phase.
+The project is in an active implementation phase.
 
 Implemented:
 
-- MCP startup and tool registration foundations
-- baseline MCP tools for status/device info, command execution, and file upload
-- static connection configuration
-- connection pool lifecycle scaffolding
-- direct SSH connectivity using Paramiko
-- reverse tunnel probing through already exposed local ports
-- structured command execution results
+- MCP startup and full node-lifecycle tool surface (see MCP Tools above)
+- node registry and connection pool with direct SSH via Paramiko
+- node enrollment via password bootstrap (`add_node`)
+- agent SSH identity generation and key retrieval (`get_agent_public_key`)
+- node handshake — facts collection via `resources/node/handshake.sh`
+- structured command execution, SFTP upload, and SFTP download
+- reverse tunnel probing through already-exposed local ports
 
 Evolving:
 
-- capability discovery model
-- normalized capability cache
+- capability discovery and normalized capability cache
 - execution history model
 - task routing support
-- onboarding workflows
 
 Not yet implemented:
 
 - full agent-side reverse tunnel SSH listener
 - end-to-end reverse tunnel establishment lifecycle
-- richer capability orchestration
-- advanced workflow execution primitives
+- advanced capability orchestration
 
 Documentation must continue to distinguish implemented behavior from intended architecture.
 
