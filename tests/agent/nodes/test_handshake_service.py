@@ -4,7 +4,7 @@ Unit tests for NodeHandshakeService.
 No live SSH or sshd fixture needed — all tests are pure unit tests.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -45,7 +45,7 @@ CANNED_KEYS = [
 
 def _make_mock_connection(stdout: str) -> MagicMock:
     """Return a mock connection whose execute() returns a CommandResult with given stdout."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     result = CommandResult(
         command="sh -s <<'EOF'\n...\nEOF",
         exit_code=0,

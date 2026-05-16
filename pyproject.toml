@@ -24,3 +24,6 @@ markers = [
     "requires_sshd: marks tests that require a running sshd fixture",
     "integration: marks integration tests that start the app or external processes (deselect with '-m not integration')",
 ]
+filterwarnings = [
+    "error",
+]

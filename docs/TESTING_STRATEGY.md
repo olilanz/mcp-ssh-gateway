@@ -80,6 +80,10 @@ Functional test files live in `tests/functional/`. Unit tests run without the
 - Must not use raw stdin/stdout JSON protocol — use actual MCP client behavior
 - Run with: `pytest -m integration -q`
 
+### Warning Policy
+
+Warnings are treated as errors. A clean test run must have zero warnings. New warnings must either be fixed at the source or explicitly justified with a narrow filter added to the `filterwarnings` list in `pyproject.toml`. Broad warning suppression is not permitted.
+
 ### Wait Helper Contract
 
 `_wait_for_open()` helpers in functional tests must assert clearly on timeout:
