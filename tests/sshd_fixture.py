@@ -184,11 +184,26 @@ def spawn_sshd_password(tmp_path):
     Uses a dedicated test-only Unix user (sshbootstrap) with a known password.
     Never mutates the vscode user. Never depends on system sshd.
     Skips if sshd is unavailable or sshbootstrap user does not exist.
+
+    Design notes:
+    - sshd runs as root (via sudo) so that PAM can read /etc/shadow and verify
+      the sshbootstrap password. A non-root sshd cannot authenticate passwords.
+    - AuthorizedKeysFile is set to the real sshbootstrap home (~/.ssh/authorized_keys)
+      because add_node writes via SFTP to the SFTP-resolved home path. The fixture
+      must use the same path that SFTP will write to, or key validation will always fail.
+    - The ~/.ssh/authorized_keys file for sshbootstrap is cleared before and after
+      each test run to ensure isolation. Cleanup happens in the finally block.
+    - This fixture ONLY mutates the dedicated 'sshbootstrap' user — never vscode or
+      any production sshd state.
     """
     import shutil as _shutil
+    from pathlib import Path
 
     if _shutil.which("sshd") is None:
         pytest.skip("sshd not available in this environment")
+
+    if _shutil.which("sudo") is None:
+        pytest.skip("sudo not available (required to run sshd as root for PAM password auth)")
 
     try:
         bootstrap_user = pwd.getpwnam("sshbootstrap")
@@ -197,37 +212,47 @@ def spawn_sshd_password(tmp_path):
 
     sshd_bin = _shutil.which("sshd") or "/usr/sbin/sshd"
 
-    # Generate host key for this fixture's sshd instance — use ed25519 to match spawn_sshd
+    # Verify sudo access is available without a password
+    check = subprocess.run(["sudo", "-n", "true"], capture_output=True)
+    if check.returncode != 0:
+        pytest.skip("passwordless sudo not available (required to run sshd as root)")
+
+    # Generate host key as root so sshd (running as root) owns it
     host_key_path = tmp_path / "host_key"
     subprocess.run(
-        ["ssh-keygen", "-t", "ed25519", "-N", "", "-f", str(host_key_path)],
+        ["sudo", "ssh-keygen", "-t", "ed25519", "-N", "", "-f", str(host_key_path)],
         check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
+    # Make the key readable for sshd (running as root, so root-owned is fine)
+    subprocess.run(["sudo", "chmod", "600", str(host_key_path)], check=True)
 
-    # Safety: This fixture mutates only the dedicated test user 'sshbootstrap',
-    # never the developer user or any production sshd state.
-    # 'sshbootstrap' exists solely for password-bootstrap tests and has no
-    # production role or shared authorized_keys with other users.
-    #
-    # Note: AuthorizedKeysFile under tmp_path was considered to avoid touching
-    # global home state entirely. OpenSSH sshd_config does support
-    # "AuthorizedKeysFile /tmp/.../authorized_keys" and it works correctly —
-    # the sshd_config below uses tmp_path for AuthorizedKeysFile, so we do NOT
-    # write to the user's home ~/.ssh/authorized_keys at all. The home .ssh dir
-    # is not touched. Cleanup is fully within tmp_path.
-    from pathlib import Path
-    # Use tmp_path-scoped authorized_keys — sshd_config references this path directly.
-    # This avoids touching /home/sshbootstrap/.ssh entirely.
-    auth_keys_path = tmp_path / "authorized_keys"
-    auth_keys_path.write_text("")
-    auth_keys_path.chmod(0o644)
+    # Safety: This fixture mutates only the dedicated test user 'sshbootstrap'.
+    # The authorized_keys path MUST match what add_node writes via SFTP (the user's
+    # real home ~sshbootstrap/.ssh/authorized_keys). We pre-clear it and clean it up.
+    ssh_dir = Path(bootstrap_user.pw_dir) / ".ssh"
+    auth_keys_path = ssh_dir / "authorized_keys"
+
+    # Pre-clear sshbootstrap's authorized_keys (create dir if needed)
+    subprocess.run(
+        ["sudo", "-u", "sshbootstrap", "mkdir", "-p", str(ssh_dir)],
+        check=True
+    )
+    subprocess.run(
+        ["sudo", "-u", "sshbootstrap", "chmod", "700", str(ssh_dir)],
+        check=True
+    )
+    subprocess.run(
+        ["sudo", "sh", "-c", f"echo -n > {auth_keys_path} && chmod 600 {auth_keys_path} && chown sshbootstrap:sshbootstrap {auth_keys_path}"],
+        check=True
+    )
 
     # Find sftp-server
     sftp_server = "/usr/lib/openssh/sftp-server"
     if not os.path.exists(sftp_server):
         sftp_server = "/usr/lib/sftp-server"
 
-    # sshd_config for this fixture
+    # sshd_config for this fixture — AuthorizedKeysFile points to the real home dir
+    # so that key-based auth validates the key that add_node writes via SFTP.
     port = _find_free_port()
     sshd_config_path = tmp_path / "sshd_config"
     pid_file = tmp_path / "sshd.pid"
@@ -240,7 +265,7 @@ LogLevel DEBUG
 AllowUsers sshbootstrap
 PasswordAuthentication yes
 PubkeyAuthentication yes
-AuthorizedKeysFile {str(auth_keys_path)}
+AuthorizedKeysFile %h/.ssh/authorized_keys
 PermitRootLogin no
 UsePAM yes
 StrictModes no
@@ -251,9 +276,12 @@ Subsystem sftp {sftp_server}
 
     log_path = tmp_path / "sshd.log"
 
-    # Start sshd
+    # Ensure privilege separation directory exists (required by sshd when running as root)
+    subprocess.run(["sudo", "mkdir", "-p", "/run/sshd"], check=True)
+
+    # Start sshd as root (required for PAM password auth to read /etc/shadow)
     process = subprocess.Popen(
-        [sshd_bin, "-D", "-f", str(sshd_config_path), "-E", str(log_path)],
+        ["sudo", sshd_bin, "-D", "-f", str(sshd_config_path), "-E", str(log_path)],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
 
@@ -278,10 +306,21 @@ Subsystem sftp {sftp_server}
             process=process,
         )
     finally:
-        process.terminate()
+        # Terminate sshd (running as root — sudo kill)
         try:
+            subprocess.run(["sudo", "kill", str(process.pid)], capture_output=True)
             process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-        # tmp_path cleanup is handled by pytest automatically.
-        # No home directory state was written — authorized_keys lived in tmp_path.
+        except Exception:
+            try:
+                subprocess.run(["sudo", "kill", "-9", str(process.pid)], capture_output=True)
+            except Exception:
+                pass
+        # Clear authorized_keys to restore isolation for future test runs
+        try:
+            subprocess.run(
+                ["sudo", "sh", "-c", f"echo -n > {auth_keys_path} && chmod 600 {auth_keys_path}"],
+                capture_output=True
+            )
+        except Exception:
+            pass
+        # tmp_path cleanup (host_key, config, log) is handled by pytest automatically.

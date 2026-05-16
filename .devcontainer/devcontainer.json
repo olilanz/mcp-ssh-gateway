@@ -29,7 +29,7 @@
     "source=shared_git_identity,target=/opt/shared-git-identity,type=volume",
     "source=mcp-ssh-gateway-roo-2,target=/home/vscode/.vscode-server/data/User/globalStorage/rooveterinaryinc.roo-cline,type=volume"
   ],
-  "postCreateCommand": "pip install --no-cache-dir --break-system-packages -e /workspaces/mcp-ssh-gateway",
+  "postCreateCommand": "pip install --no-cache-dir --break-system-packages -e '/workspaces/mcp-ssh-gateway[dev]'",
   "postStartCommand": "bash /workspaces/mcp-ssh-gateway/.devcontainer/bin/setup-git-identity",
   "forwardPorts": [
     "2022:22",

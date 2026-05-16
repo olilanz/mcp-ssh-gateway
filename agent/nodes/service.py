@@ -155,8 +155,6 @@ class NodeService:
         # Step 2: named node lookup (refresh=True or refresh=False)
         if name is not None:
             if not self._registry.exists(name):
-                if refresh:
-                    return {"error": "not_found", "name": name}
                 return {"error": "node not found", "name": name}
             config, cache = self._registry.get(name)
 

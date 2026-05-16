@@ -199,6 +199,13 @@ def test_refresh_without_name_returns_error():
     assert "reason" in result
 
 
+def test_refresh_single_node_not_found():
+    """get_node_info(name="x", refresh=True) with unknown node returns {"error": "node not found"}."""
+    svc = make_service()
+    result = svc.get_node_info(name="no-such-node", refresh=True)
+    assert result == {"error": "node not found", "name": "no-such-node"}
+
+
 def test_refresh_disabled_node_returns_error():
     """get_node_info(name=..., refresh=True) on a disabled node returns node_disabled error."""
     from unittest.mock import MagicMock
