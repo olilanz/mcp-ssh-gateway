@@ -55,6 +55,11 @@ EXPOSE ${SSH_LISTEN_PORT}
 # This user MUST NOT be used for any production purpose.
 # Its password is hard-coded and intentionally weak because it is only
 # reachable from 127.0.0.1 inside an ephemeral test sshd instance.
+#
+# TODO (image split): Before shipping a hardened production image, move
+# sshbootstrap to the devcontainer/test image only (.devcontainer/Dockerfile).
+# The production Dockerfile should not include test-only users or credentials.
+# Tracked: sshbootstrap is already present in .devcontainer/Dockerfile.
 RUN useradd -m -s /bin/sh sshbootstrap \
     && echo 'sshbootstrap:sshbootstrap' | chpasswd
 

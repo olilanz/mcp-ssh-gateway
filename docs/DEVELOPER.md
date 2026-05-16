@@ -206,10 +206,6 @@ The handshake script is POSIX sh, has no external dependencies, and can be run m
 ssh <node> 'sh -s' < resources/node/handshake.sh
 ```
 
-### Legacy local tools
-
-`run_command` and `upload_file` remain unchanged and operate on the gateway host, not on nodes.
-
 ## Resources directory
 
 `resources/node/` contains scripts that run **on managed nodes**, not on the gateway.
@@ -223,28 +219,30 @@ Scripts in this directory are:
 
 Current code implements:
 
-- MCP startup and tool registration foundations,
-- static connection configuration,
-- connection pool lifecycle scaffolding,
-- direct SSH connectivity using Paramiko,
-- reverse tunnel probing through already exposed local ports,
-- structured command execution,
-- node execution MCP tools (`run_command_on_node`, `upload_file_to_node`, `download_file_from_node`),
+- MCP startup and full node-lifecycle tool surface,
+- node registry (`NodeRegistry`) and connection pool (`ConnectionPool`) with direct SSH via Paramiko,
+- node enrollment via password bootstrap (`add_node`) using one-shot SFTP key installation,
+- agent SSH identity generation and management (`AgentIdentityService`, `get_agent_public_key`),
+- node lifecycle mutation: `add_node`, `enable_node`, `disable_node`, `remove_node`,
+- node status and info queries: `get_node_status`, `get_node_info` (with explicit manual refresh),
+- connection probe and handshake: `enable_node(validate=True)`, `get_node_info(refresh=True)`,
+- node execution MCP tools: `run_command_on_node`, `upload_file_to_node`, `download_file_from_node`,
 - `NodeService.ensure_node_ready()` readiness gate,
 - `NodeHandshakeService` with automatic fact collection on first node use,
 - and `resources/node/handshake.sh` POSIX sh fact-collection script.
 
 Current code is evolving around:
 
-- capability discovery,
-- normalized capability cache,
-- onboarding workflows,
-- execution history,
+- host-key validation and `known_hosts` trust management,
+- capability discovery and normalized capability cache,
+- execution history model,
 - and richer operational primitives.
 
 Current code does not yet implement:
 
+- host-key validation (connections use `AutoAddPolicy` — host-key hardening is deferred),
 - full agent-side reverse tunnel SSH listener behavior,
+- reverse tunnel lifecycle (deferred; future direction is OpenSSH `sshd` as a controlled process),
 - advanced capability orchestration,
 - or richer distributed workflow execution.
 
