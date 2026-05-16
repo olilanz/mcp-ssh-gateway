@@ -25,7 +25,7 @@ Current confirmed stubs:
 The following constraints are absolute and must be respected in all implementation and test work derived from this plan:
 
 - `refresh=True` is an **explicit manual refresh** triggered by the caller, not a live or periodic mechanism
-- **Bulk refresh** (`name=None`, `refresh=True`) is **not supported in v1**; the caller must specify a named node
+- **Refresh requires an explicit target** (a named node). If `refresh=True` is called without a node name, return `{"error": "refresh_target_required"}`. Node facts are low-volatility; refresh should be purposeful and bounded.
 - **Tests must not mutate the devcontainer user password under any circumstances**
 - **Functional password-bootstrap tests require a fully isolated test user or are deferred to a later slice**
 - **Host-key hardening (Phase 5) may be extracted as a separate slice** if implementation scope grows significantly
@@ -109,7 +109,7 @@ get_node_info(refresh=True)  = explicitly refresh cached node facts on demand (s
 Guard sequence — each failure short-circuits with a structured error dict:
 
 ```
-1. name is None and refresh=True → {"error": "bulk_refresh_not_supported",
+1. name is None and refresh=True → {"error": "refresh_target_required",
                                      "reason": "Specify a node name when refresh=true"}
 2. registry.exists(name)          → {"error": "node not found", "name": name}
 3. config.enabled                 → {"error": "node_disabled", "name": name}
@@ -135,18 +135,28 @@ If `handshake_service.run()` returns `{}` (empty facts), this is **not** a soft 
 
 Do **not** return a response that looks like a successful refresh. Use `refresh_failed` as the key — not `refresh_note`.
 
-#### Bulk Refresh: Not Supported in v1
+#### Refresh Without a Named Target: Not Supported
 
-`get_node_info(name=None, refresh=True)` is not supported. Return immediately:
+`get_node_info(name=None, refresh=True)` returns immediately:
 
 ```json
 {
-  "error": "bulk_refresh_not_supported",
+  "error": "refresh_target_required",
   "reason": "Specify a node name when refresh=true"
 }
 ```
 
-If bulk refresh is ever needed, it must be a separate explicitly named tool (e.g., `refresh_all_node_info`), not an overload of this parameter. That tool is **not** in scope for this plan.
+Refresh requires an explicit target. The gateway does not provide an implicit refresh-all behavior because node facts are low-volatility and refresh should be intentional.
+
+If a refresh-all operation is ever needed, it must be a separate explicitly named tool (e.g., `refresh_all_node_info`), not an overload of this parameter. That tool is **not** in scope for this plan.
+
+**Purposeful refresh triggers in this gateway:**
+- Explicit `get_node_info(name, refresh=True)` call
+- `enable_node(validate=True)` — validates and refreshes that named node
+- `add_node` after successful bootstrap
+- First execution/readiness check when cache is empty (`ensure_node_ready`)
+
+After reconnect, handshake runs only if cache is empty — not automatically on every reconnect.
 
 #### Non-Refresh Path (`refresh=False`)
 
@@ -164,7 +174,7 @@ No changes to current behavior: return stale cache as-is. Remove the `refresh_no
 
 **Error response shapes:**
 ```json
-{"error": "bulk_refresh_not_supported", "reason": "Specify a node name when refresh=true"}
+{"error": "refresh_target_required", "reason": "Specify a node name when refresh=true"}
 {"error": "node not found", "name": "node-a"}
 {"error": "node_disabled", "name": "node-a"}
 {"error": "connection_not_open", "name": "node-a"}
@@ -183,7 +193,7 @@ No changes to current behavior: return stale cache as-is. Remove the `refresh_no
 
 | Step | Responsible Layer | Method |
 |---|---|---|
-| Bulk-refresh rejection | `NodeService` | inline guard on `name is None and refresh` |
+| Refresh-without-name rejection | `NodeService` | inline guard on `name is None and refresh` |
 | Registry existence check | `NodeService` | `registry.exists(name)` |
 | Enabled guard | `NodeService` | `config.enabled` field check |
 | Connection open / re-open | `ConnectionPool` | `pool.ensure_connection_open(name)` |
@@ -210,7 +220,7 @@ No changes to current behavior: return stale cache as-is. Remove the `refresh_no
 | `test_refresh_single_node_disabled` | node exists, `enabled=False` | `{"error": "node_disabled", "name": "node-a"}` |
 | `test_refresh_single_node_connection_not_open` | enabled, `ensure_connection_open` returns `None` | `{"error": "connection_not_open", "name": "node-a"}` |
 | `test_refresh_single_node_handshake_empty` | enabled, conn open, handshake returns `{}` | response has `refresh_failed: "handshake_returned_empty"`, no cache update, stale `node_facts` or null |
-| `test_refresh_bulk_rejected` | `name=None`, `refresh=True` | `{"error": "bulk_refresh_not_supported", "reason": "Specify a node name when refresh=true"}` |
+| `test_refresh_without_name_returns_error` | `name=None`, `refresh=True` | `{"error": "refresh_target_required", "reason": "Specify a node name when refresh=true"}` |
 | `test_no_refresh_returns_stale_no_refresh_failed` | node with stale cache, `refresh=False` | no `refresh_failed` key in response; no `refresh_note` key in response |
 | `test_refresh_handshake_empty_returns_stale_cache` | pre-populated stale cache, handshake returns `{}` | `node_facts` contains stale data, `refresh_failed` present |
 | `test_refresh_cache_updated_on_non_empty_handshake` | handshake returns non-empty facts | `registry.update_cache` called; response `info` reflects new facts |
@@ -673,7 +683,7 @@ The `Connection` facade must thread the `host_key_policy` kwarg through to `Dire
 
 | Operation | `NodeService` | `ConnectionPool` | `NodeHandshakeService` | `NodeRegistry` | `AgentIdentityService` |
 |---|---|---|---|---|---|
-| Guard: bulk refresh rejected | owns | — | — | — | — |
+| Guard: refresh without name rejected | owns | — | — | — | — |
 | Guard: node exists | owns | — | — | `exists()` | — |
 | Guard: node enabled | owns | — | — | — | — |
 | Guard: in pool | delegates | `get_connection()` | — | — | — |
@@ -756,7 +766,7 @@ pytest -m "not functional" -q --tb=short
 | Decision | Rationale |
 |---|---|
 | `refresh=True` is explicit manual refresh only | No background, periodic, or automatic refresh. Caller explicitly triggers cache refresh on demand. |
-| Bulk refresh (`name=None`, `refresh=True`) returns `bulk_refresh_not_supported` | v1 scoping constraint. Bulk refresh would be a separate named tool, not a parameter overload. |
+| Refresh requires an explicit target. Calling `refresh=True` without a node name returns `refresh_target_required`. The gateway does not provide implicit refresh-all behavior because node facts (hostname, kernel, architecture, shell, os release) are low-volatility and refresh should be intentional. | Refresh scope must be bounded and purposeful. A refresh-all operation, if ever needed, would be a separate explicitly named tool, not a parameter overload. |
 | Disabled nodes return `node_disabled` error on single-name refresh | Clear error semantics; caller should check status before requesting refresh. |
 | Handshake returning `{}` sets `refresh_failed`, not `refresh_note` | Unambiguous failure signal. Do not use keys that look like informational notes for actual failures. |
 | `enable_node(validate=True)` does not revert on failure | Validation is a probe, not a gate. Operator explicitly enabled the node; the service must not silently undo that intent. |
