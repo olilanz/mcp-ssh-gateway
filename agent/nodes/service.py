@@ -50,7 +50,7 @@ class NodeService:
       - add_node(name, host, port, user, password, mode)
     """
 
-    def __init__(self, registry: NodeRegistry, pool: ConnectionPool, handshake_service=None, agent_identity_service=None) -> None:
+    def __init__(self, registry: NodeRegistry, pool: ConnectionPool, handshake_service=None, agent_identity_service=None) -> None:  # noqa: keep signature backward-compat for now; Fix D enforced via conftest
         self._registry = registry
         self._pool = pool
         # Import here to avoid circular imports at module level if needed
@@ -321,7 +321,7 @@ class NodeService:
         name: str,
         host: str,
         port: int,
-        username: str,
+        user: str,
         password: str,
         mode: str = "direct",
     ) -> dict:
@@ -336,7 +336,7 @@ class NodeService:
             name:     Unique node name.
             host:     SSH hostname or IP.
             port:     SSH port.
-            username: SSH username.
+            user:     SSH username.
             password: Bootstrap password — used only to install agent public key.
             mode:     Connection mode. Only "direct" is supported.
 
@@ -359,14 +359,14 @@ class NodeService:
 
         # Step 1: duplicate guard
         if self._registry.exists(name):
-            return {"error": "already_exists", "name": name}
+            return {"error": "node_already_exists", "name": name}
 
         # Step 2: password-based connection
         pw_client = paramiko.SSHClient()
         pw_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
             # password used here and nowhere else
-            pw_client.connect(host, port=port, username=username, password=password, timeout=15)
+            pw_client.connect(host, port=port, username=user, password=password, timeout=15)
         except Exception as exc:
             try:
                 pw_client.close()
@@ -374,12 +374,13 @@ class NodeService:
                 pass
             return {"error": "password_connect_failed", "name": name, "detail": str(exc)}
 
-        # Step 3: retrieve agent public key — password is no longer referenced below
+        # Step 3: retrieve agent public key and private key path — password is no longer referenced below
         try:
             if self._identity_service is None:
                 raise RuntimeError("identity service is not configured")
             identity = self._identity_service.get_identity()
             key_line = identity.public_key
+            private_key_path = identity.private_key_path
         except Exception:
             try:
                 pw_client.close()
@@ -425,7 +426,7 @@ class NodeService:
                 pw_client.close()
             except Exception:
                 pass
-            return {"error": "key_install_failed", "name": name, "detail": str(exc)}
+            return {"error": "authorized_keys_write_failed", "name": name, "detail": str(exc)}
 
         # Step 5: close password connection
         try:
@@ -438,9 +439,9 @@ class NodeService:
             name=name,
             host=host,
             port=port,
-            user=username,
+            user=user,
             mode="direct",
-            id_file=None,
+            id_file=private_key_path,
         )
         self._pool.add_connection(config)
 
@@ -455,10 +456,10 @@ class NodeService:
             name=name,
             host=host,
             port=port,
-            user=username,
+            user=user,
             mode="direct",
             enabled=True,
-            id_file=None,
+            id_file=private_key_path,
         )
         self._registry.add(node_config)
         return {"status": "added", "name": name, "validated": True}

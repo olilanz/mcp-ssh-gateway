@@ -156,10 +156,10 @@ def test_add_node_delegates_to_service():
     mcp_handlers.register_tools(mcp, svc, make_mock_identity_service())
 
     fn = _get_tool_fn(mcp, "add_node")
-    result = fn(name="node-b", host="192.168.1.5", port=22, username="pi", password="secret", mode="direct")
+    result = fn(name="node-b", host="192.168.1.5", port=22, user="pi", password="secret", mode="direct")
 
     svc.add_node.assert_called_once_with(
-        name="node-b", host="192.168.1.5", port=22, username="pi", password="secret", mode="direct"
+        name="node-b", host="192.168.1.5", port=22, user="pi", password="secret", mode="direct"
     )
     assert result["name"] == "test"
 

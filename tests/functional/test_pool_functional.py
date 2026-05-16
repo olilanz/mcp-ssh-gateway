@@ -53,8 +53,8 @@ def pool_and_name(spawn_sshd):
 def test_pool_get_connection_state_open(pool_and_name):
     """pool.get_connection_state(name) returns 'open' after pool.start()."""
     pool, name = pool_and_name
-    state = _wait_for_open(pool, name)
-    assert state == "open"
+    _wait_for_open(pool, name)
+    assert pool.get_connection_state(name) == "open"
 
 
 @pytest.mark.functional

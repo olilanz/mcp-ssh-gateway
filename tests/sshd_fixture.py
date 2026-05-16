@@ -40,6 +40,16 @@ class SpawnedSSHD:
             self.process.wait()
 
 
+@dataclass
+class SpawnedSSHDPassword:
+    host: str             # always "127.0.0.1"
+    port: int             # random high port
+    username: str         # the sshbootstrap test user
+    password: str         # the sshbootstrap test password
+    host_key_path: str    # path to the sshd host key for this fixture instance
+    process: subprocess.Popen
+
+
 def _find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
@@ -119,11 +129,13 @@ Subsystem sftp {sftp_server}
 
         log_path = os.path.join(tempdir, "sshd.log")
 
-        # Start sshd in foreground (-D) with our config
+        # Start sshd in foreground (-D) with our config.
+        # stdout/stderr go to DEVNULL since all logging is sent to log_path via -E.
+        # Using PIPE would leave unclosed file descriptors that trigger ResourceWarning.
         process = subprocess.Popen(
             [sshd_bin, "-D", "-f", sshd_config_path, "-E", log_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
 
         try:
@@ -163,3 +175,107 @@ Subsystem sftp {sftp_server}
                 process.kill()
                 process.wait()
         shutil.rmtree(tempdir, ignore_errors=True)
+
+
+@pytest.fixture
+def spawn_sshd_password(tmp_path):
+    """Spawn an isolated local sshd allowing password auth for sshbootstrap user only.
+
+    Uses a dedicated test-only Unix user (sshbootstrap) with a known password.
+    Never mutates the vscode user. Never depends on system sshd.
+    Skips if sshd is unavailable or sshbootstrap user does not exist.
+    """
+    import shutil as _shutil
+
+    if _shutil.which("sshd") is None:
+        pytest.skip("sshd not available in this environment")
+
+    try:
+        bootstrap_user = pwd.getpwnam("sshbootstrap")
+    except KeyError:
+        pytest.skip("sshbootstrap test user not available (add to Dockerfile)")
+
+    sshd_bin = _shutil.which("sshd") or "/usr/sbin/sshd"
+
+    # Generate host key for this fixture's sshd instance
+    host_key_path = tmp_path / "host_key"
+    subprocess.run(
+        ["ssh-keygen", "-t", "rsa", "-b", "2048", "-N", "", "-f", str(host_key_path)],
+        check=True, capture_output=True
+    )
+
+    # authorized_keys path for cleanup
+    from pathlib import Path
+    auth_keys_path = Path(bootstrap_user.pw_dir) / ".ssh" / "authorized_keys"
+
+    # Clean authorized_keys before test
+    auth_keys_path.parent.mkdir(mode=0o700, exist_ok=True)
+    auth_keys_path.write_text("")
+    auth_keys_path.chmod(0o600)
+
+    # Find sftp-server
+    sftp_server = "/usr/lib/openssh/sftp-server"
+    if not os.path.exists(sftp_server):
+        sftp_server = "/usr/lib/sftp-server"
+
+    # sshd_config for this fixture
+    port = _find_free_port()
+    sshd_config_path = tmp_path / "sshd_config"
+    pid_file = tmp_path / "sshd.pid"
+    sshd_config_path.write_text(f"""
+Port {port}
+ListenAddress 127.0.0.1
+HostKey {host_key_path}
+PidFile {pid_file}
+LogLevel DEBUG
+AllowUsers sshbootstrap
+PasswordAuthentication yes
+PubkeyAuthentication yes
+AuthorizedKeysFile {auth_keys_path}
+PermitRootLogin no
+UsePAM yes
+StrictModes no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+Subsystem sftp {sftp_server}
+""")
+
+    log_path = tmp_path / "sshd.log"
+
+    # Start sshd
+    process = subprocess.Popen(
+        [sshd_bin, "-D", "-f", str(sshd_config_path), "-E", str(log_path)],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+
+    try:
+        try:
+            _wait_for_port("127.0.0.1", port, timeout=10.0)
+        except TimeoutError:
+            process.terminate()
+            process.wait()
+            try:
+                log_content = log_path.read_text()
+            except Exception:
+                log_content = "(no log)"
+            pytest.skip(f"sshd (password fixture) failed to start on port {port}. Log:\n{log_content}")
+
+        yield SpawnedSSHDPassword(
+            host="127.0.0.1",
+            port=port,
+            username="sshbootstrap",
+            password="sshbootstrap",
+            host_key_path=str(host_key_path),
+            process=process,
+        )
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        # Clean up authorized_keys after test
+        try:
+            auth_keys_path.write_text("")
+        except Exception:
+            pass

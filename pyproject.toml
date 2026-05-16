@@ -23,7 +23,12 @@ markers = [
     "functional: marks tests that require real system resources (sshd, network)",
     "requires_sshd: marks tests that require a running sshd fixture",
     "integration: marks integration tests that start the app or external processes (deselect with '-m not integration')",
+    "requires_password_sshd: marks tests that require the password-enabled sshd fixture with sshbootstrap user",
 ]
 filterwarnings = [
     "error",
+    # Paramiko's SSH transport uses internal buffered file objects that are
+    # closed asynchronously by the GC after the test. This is a known Paramiko
+    # resource management issue unrelated to project code.
+    "ignore::ResourceWarning:paramiko",
 ]

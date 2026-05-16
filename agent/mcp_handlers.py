@@ -16,9 +16,9 @@ def register_tools(mcp: FastMCP, node_service, agent_identity_service):
         return node_service.get_node_info(name=name, refresh=refresh)
 
     @mcp.tool()
-    def add_node(name: str, host: str, port: int = 22, username: str = "pi", password: str = "", mode: str = "direct") -> dict:
-        logging.debug(f"add_node called: name={name}, host={host}, port={port}, username={username}, mode={mode}")
-        return node_service.add_node(name=name, host=host, port=port, username=username, password=password, mode=mode)
+    def add_node(name: str, host: str, port: int = 22, user: str = "pi", password: str = "", mode: str = "direct") -> dict:
+        logging.debug(f"add_node called: name={name}, host={host}, port={port}, user={user}, mode={mode}")
+        return node_service.add_node(name=name, host=host, port=port, user=user, password=password, mode=mode)
 
     @mcp.tool()
     def remove_node(name: str) -> dict:

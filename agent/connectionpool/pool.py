@@ -246,8 +246,14 @@ class ConnectionPool:
         Called after a successful bootstrap so the new connection is immediately
         eligible for the monitor and for ensure_connection_open().
         Thread-safe.
+
+        Raises:
+            ValueError: if a connection with config.name already exists in the pool.
         """
         with self.lock:
+            for conn in self.connections:
+                if conn.name == config.name:
+                    raise ValueError(f"Connection '{config.name}' already exists in pool")
             self._disabled_names.discard(config.name)
             conn = Connection(config)
             self.connections.append(conn)

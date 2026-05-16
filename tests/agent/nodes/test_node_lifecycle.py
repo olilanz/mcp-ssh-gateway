@@ -36,7 +36,7 @@ def test_disable_node_calls_pool_disable():
     registry = NodeRegistry()
     registry.add(make_node_config("lab-pi-01"))
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool)
+    svc = NodeService(registry=registry, pool=pool, agent_identity_service=MagicMock())
     svc.disable_node("lab-pi-01")
     pool.disable_connection.assert_called_once_with("lab-pi-01")
 
@@ -77,7 +77,7 @@ def test_enable_node_calls_pool_enable():
     registry = NodeRegistry()
     registry.add(make_node_config("lab-pi-01", enabled=False))
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool)
+    svc = NodeService(registry=registry, pool=pool, agent_identity_service=MagicMock())
     svc.enable_node("lab-pi-01")
     pool.enable_connection.assert_called_once_with("lab-pi-01")
 
@@ -257,7 +257,7 @@ def test_remove_node_calls_pool_remove():
     registry = NodeRegistry()
     registry.add(make_node_config("lab-pi-01"))
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool)
+    svc = NodeService(registry=registry, pool=pool, agent_identity_service=MagicMock())
     svc.remove_node("lab-pi-01")
     pool.remove_connection.assert_called_once_with("lab-pi-01")
 
@@ -279,7 +279,7 @@ _ADD_NODE_KWARGS = dict(
     name="new-node",
     host="192.168.1.50",
     port=22,
-    username="pi",
+    user="pi",
     password="s3cr3t-bootstrap",
     mode="direct",
 )
@@ -289,14 +289,14 @@ def test_add_node_unsupported_mode():
     """mode != 'direct' → {"error": "unsupported_mode"}, no SSH attempted."""
     registry = NodeRegistry()
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool)
+    svc = NodeService(registry=registry, pool=pool, agent_identity_service=MagicMock())
 
     with patch("paramiko.SSHClient") as mock_ssh_cls:
         result = svc.add_node(
             name="new-node",
             host="192.168.1.50",
             port=22,
-            username="pi",
+            user="pi",
             password="s3cr3t",
             mode="tunnel",
         )
@@ -311,16 +311,16 @@ def test_add_node_unsupported_mode():
 
 
 def test_add_node_already_exists():
-    """name already in registry → {"error": "already_exists"}, no SSH attempted."""
+    """name already in registry → {"error": "node_already_exists"}, no SSH attempted."""
     registry = NodeRegistry()
     registry.add(make_node_config("new-node"))
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool)
+    svc = NodeService(registry=registry, pool=pool, agent_identity_service=MagicMock())
 
     with patch("paramiko.SSHClient") as mock_ssh_cls:
         result = svc.add_node(**_ADD_NODE_KWARGS)
 
-    assert result == {"error": "already_exists", "name": "new-node"}
+    assert result == {"error": "node_already_exists", "name": "new-node"}
     mock_ssh_cls.assert_not_called()
 
 
@@ -328,7 +328,7 @@ def test_add_node_password_connect_failed():
     """pw_client.connect() raises → {"error": "password_connect_failed"}, registry unchanged, pw_client closed."""
     registry = NodeRegistry()
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool)
+    svc = NodeService(registry=registry, pool=pool, agent_identity_service=MagicMock())
 
     mock_pw_client = MagicMock()
     mock_pw_client.connect.side_effect = Exception("Connection refused")
@@ -363,7 +363,7 @@ def test_add_node_identity_not_available():
 
 
 def test_add_node_key_install_failed():
-    """SFTP open_sftp raises → {"error": "key_install_failed"}, pw_client closed, registry unchanged."""
+    """SFTP open_sftp raises → {"error": "authorized_keys_write_failed"}, pw_client closed, registry unchanged."""
     registry = NodeRegistry()
     pool = make_mock_pool()
     identity_svc = make_mock_identity_service()
@@ -375,7 +375,7 @@ def test_add_node_key_install_failed():
     with patch("paramiko.SSHClient", return_value=mock_pw_client):
         result = svc.add_node(**_ADD_NODE_KWARGS)
 
-    assert result["error"] == "key_install_failed"
+    assert result["error"] == "authorized_keys_write_failed"
     assert result["name"] == "new-node"
     assert "detail" in result
     mock_pw_client.close.assert_called()
@@ -495,7 +495,7 @@ def test_add_node_password_not_in_logs(caplog):
             name="test-node",
             host="192.168.1.50",
             port=22,
-            username="pi",
+            user="pi",
             password=secret_password,
             mode="direct",
         )

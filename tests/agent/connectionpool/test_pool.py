@@ -340,3 +340,25 @@ def test_add_connection_clears_disabled_state():
     assert "nu" not in pool._disabled_names
     # Connection must have been appended to pool.connections
     assert any(c.name == "nu" for c in pool.connections)
+
+
+def test_add_connection_rejects_duplicate():
+    """pool.add_connection() must raise ValueError if a connection with the same name already exists."""
+    pool = _make_pool_with_fake_connections(["xi"])
+
+    config = ConnectionConfig(
+        name="xi",
+        host="10.0.0.6",
+        port=22,
+        user="pi",
+        id_file=None,
+        mode="direct",
+    )
+
+    import pytest
+    with patch("agent.connectionpool.pool.Connection"):
+        with pytest.raises(ValueError, match="xi"):
+            pool.add_connection(config)
+
+    # Pool must still contain only one connection named "xi"
+    assert sum(1 for c in pool.connections if c.name == "xi") == 1
