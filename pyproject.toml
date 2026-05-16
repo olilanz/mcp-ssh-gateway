@@ -27,8 +27,8 @@ markers = [
 ]
 filterwarnings = [
     "error",
-    # Paramiko's SSH transport uses internal buffered file objects that are
-    # closed asynchronously by the GC after the test. This is a known Paramiko
-    # resource management issue unrelated to project code.
-    "ignore::ResourceWarning:paramiko",
+    # Paramiko transport cleanup emits ResourceWarning on GC collection of SSH transports.
+    # This is a known Paramiko lifecycle issue, not a project-owned leak.
+    # project-owned ResourceWarnings (subprocess pipes, files) still fail.
+    "ignore::ResourceWarning:paramiko.transport",
 ]

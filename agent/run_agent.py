@@ -7,6 +7,7 @@ from agent import mcp_handlers
 from agent.nodes.models import NodeConfig
 from agent.nodes.registry import NodeRegistry
 from agent.nodes.service import NodeService
+from agent.nodes.handshake import NodeHandshakeService
 from agent.identity.service import AgentIdentityService
 
 def run_agent(
@@ -67,7 +68,8 @@ def run_agent(
         )
         registry.add(cfg)
 
-    node_service = NodeService(registry=registry, pool=pool, agent_identity_service=agent_identity_service)
+    handshake_service = NodeHandshakeService()
+    node_service = NodeService(registry=registry, pool=pool, handshake_service=handshake_service, agent_identity_service=agent_identity_service)
 
     # Start MCP loop (blocking)
     mcp = FastMCP(name="mcp-ssh-gateway", host=host, port=port, stateless_http=True, json_response=True)

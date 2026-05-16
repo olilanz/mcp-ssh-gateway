@@ -49,7 +49,8 @@ def _make_service_with_open_connection(name="lab-pi-01"):
     pool.ensure_connection_open.return_value = mock_conn
 
     hs = _make_noop_handshake()
-    svc = NodeService(registry=registry, pool=pool, handshake_service=hs)
+    from unittest.mock import MagicMock as _MagicMock
+    svc = NodeService(registry=registry, pool=pool, handshake_service=hs, agent_identity_service=_MagicMock())
     return svc, mock_conn
 
 
@@ -91,7 +92,7 @@ def test_run_command_on_node_unknown_node_returns_error():
 
     registry = NodeRegistry()
     pool = MagicMock()
-    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake())
+    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake(), agent_identity_service=MagicMock())
 
     result = svc.run_command_on_node("no-such-node", "echo hi")
     assert result == {"error": "node not found", "name": "no-such-node"}
@@ -114,7 +115,7 @@ def test_run_command_on_node_disabled_node_returns_error():
     registry.add(cfg)
 
     pool = MagicMock()
-    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake())
+    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake(), agent_identity_service=MagicMock())
 
     result = svc.run_command_on_node("lab-pi-01", "echo hi")
     assert result == {"error": "node_disabled", "name": "lab-pi-01"}
@@ -140,7 +141,7 @@ def test_run_command_on_node_not_in_pool_returns_error():
     pool.get_connection_state.return_value = "not_in_pool"
     pool.get_connection.return_value = None
 
-    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake())
+    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake(), agent_identity_service=MagicMock())
 
     result = svc.run_command_on_node("lab-pi-01", "echo hi")
     assert result == {"error": "not_in_pool", "name": "lab-pi-01"}
@@ -195,7 +196,7 @@ def test_upload_file_to_node_disabled_node_returns_error():
     registry.add(cfg)
 
     pool = MagicMock()
-    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake())
+    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake(), agent_identity_service=MagicMock())
 
     valid_b64 = base64.b64encode(b"hello").decode()
     result = svc.upload_file_to_node("lab-pi-01", "/tmp/test", valid_b64, "0644")
@@ -233,7 +234,7 @@ def test_download_file_from_node_disabled_node_returns_error():
     registry.add(cfg)
 
     pool = MagicMock()
-    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake())
+    svc = NodeService(registry=registry, pool=pool, handshake_service=_make_noop_handshake(), agent_identity_service=MagicMock())
 
     result = svc.download_file_from_node("lab-pi-01", "/tmp/test")
     assert result == {"error": "node_disabled", "name": "lab-pi-01"}

@@ -197,21 +197,30 @@ def spawn_sshd_password(tmp_path):
 
     sshd_bin = _shutil.which("sshd") or "/usr/sbin/sshd"
 
-    # Generate host key for this fixture's sshd instance
+    # Generate host key for this fixture's sshd instance — use ed25519 to match spawn_sshd
     host_key_path = tmp_path / "host_key"
     subprocess.run(
-        ["ssh-keygen", "-t", "rsa", "-b", "2048", "-N", "", "-f", str(host_key_path)],
-        check=True, capture_output=True
+        ["ssh-keygen", "-t", "ed25519", "-N", "", "-f", str(host_key_path)],
+        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
 
-    # authorized_keys path for cleanup
+    # Safety: This fixture mutates only the dedicated test user 'sshbootstrap',
+    # never the developer user or any production sshd state.
+    # 'sshbootstrap' exists solely for password-bootstrap tests and has no
+    # production role or shared authorized_keys with other users.
+    #
+    # Note: AuthorizedKeysFile under tmp_path was considered to avoid touching
+    # global home state entirely. OpenSSH sshd_config does support
+    # "AuthorizedKeysFile /tmp/.../authorized_keys" and it works correctly —
+    # the sshd_config below uses tmp_path for AuthorizedKeysFile, so we do NOT
+    # write to the user's home ~/.ssh/authorized_keys at all. The home .ssh dir
+    # is not touched. Cleanup is fully within tmp_path.
     from pathlib import Path
-    auth_keys_path = Path(bootstrap_user.pw_dir) / ".ssh" / "authorized_keys"
-
-    # Clean authorized_keys before test
-    auth_keys_path.parent.mkdir(mode=0o700, exist_ok=True)
+    # Use tmp_path-scoped authorized_keys — sshd_config references this path directly.
+    # This avoids touching /home/sshbootstrap/.ssh entirely.
+    auth_keys_path = tmp_path / "authorized_keys"
     auth_keys_path.write_text("")
-    auth_keys_path.chmod(0o600)
+    auth_keys_path.chmod(0o644)
 
     # Find sftp-server
     sftp_server = "/usr/lib/openssh/sftp-server"
@@ -231,7 +240,7 @@ LogLevel DEBUG
 AllowUsers sshbootstrap
 PasswordAuthentication yes
 PubkeyAuthentication yes
-AuthorizedKeysFile {auth_keys_path}
+AuthorizedKeysFile {str(auth_keys_path)}
 PermitRootLogin no
 UsePAM yes
 StrictModes no
@@ -274,8 +283,5 @@ Subsystem sftp {sftp_server}
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             process.kill()
-        # Clean up authorized_keys after test
-        try:
-            auth_keys_path.write_text("")
-        except Exception:
-            pass
+        # tmp_path cleanup is handled by pytest automatically.
+        # No home directory state was written — authorized_keys lived in tmp_path.

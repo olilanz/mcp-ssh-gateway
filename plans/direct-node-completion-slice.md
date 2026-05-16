@@ -688,3 +688,15 @@ pytest -m "not functional" -q --tb=short
 | Legacy `run_command` / `upload_file` fully removed (Phase 1 complete) | Gateway's purpose is node access, not gateway-host execution. `shell=True` local exec is a security footgun with no use case in a node-management gateway. |
 | Phase 5 host-key hardening deferred to a future slice | Touches all connection fixtures. Keeps this slice manageable and Phase 4 `add_node` stable before hardening changes propagate. |
 | `pool.add_connection()` as new method | `add_node` bootstrap needs transactional rollback semantics. Adding to pool before committing to registry enables `remove_connection()` rollback without registry involvement. |
+
+---
+
+## Deferred: Reverse Tunnel Lifecycle
+
+Reverse tunnel lifecycle is explicitly out of scope for this slice.
+
+When implemented (future slice):
+- Preferred direction: OpenSSH `sshd` as a controlled process inside the gateway container
+- Not a Python SSH server
+- Not a sidecar container initially
+- `/data/ssh` will hold persistent SSH identity and trust state

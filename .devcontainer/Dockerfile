@@ -11,6 +11,7 @@ RUN apt-get update && \
     iproute2 \
     libffi-dev libssl-dev \
     python3-pip \
+    sudo \
     git \
     && apt-get remove -y python3-jwt \
     && rm -rf /var/lib/apt/lists/*
@@ -29,13 +30,30 @@ RUN if ! id -u vscode >/dev/null 2>&1; then \
         fi; \
         useradd -m -s /bin/bash -g vscode vscode; \
       fi; \
-    fi
+    fi \
+    && usermod -aG sudo vscode \
+    && printf 'vscode ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/90-vscode \
+    && chmod 0440 /etc/sudoers.d/90-vscode
 
 # Ensure user-local pip scripts are on PATH for the vscode user
 ENV PATH="/home/vscode/.local/bin:${PATH}"
 
-# Pre-create .roo so the named volume for Roo history inherits vscode ownership
-# when Docker seeds it from the image on first creation.
-RUN install -d -m 0755 -o vscode -g vscode /home/vscode/.roo
+# Pre-create Roo extension storage path so the named volume inherits vscode
+# ownership when Docker seeds it from the image on first creation.
+RUN install -d -m 0755 -o vscode -g vscode \
+      /home/vscode/.vscode-server \
+      /home/vscode/.vscode-server/data \
+      /home/vscode/.vscode-server/data/User \
+      /home/vscode/.vscode-server/data/User/globalStorage \
+      /home/vscode/.vscode-server/data/User/globalStorage/rooveterinaryinc.roo-cline
+
+# ── Test isolation user ──────────────────────────────────────────────────────
+# The `sshbootstrap` user exists solely to support functional tests for the
+# add_node password-bootstrap flow (tests/functional/test_add_node_functional.py).
+# Its password is hard-coded and intentionally weak because it is only
+# reachable from 127.0.0.1 inside an ephemeral test sshd instance.
+# This user MUST NOT be used for any production purpose.
+RUN useradd -m -s /bin/sh sshbootstrap \
+    && echo 'sshbootstrap:sshbootstrap' | chpasswd
 
 # No ENTRYPOINT — devcontainer lifecycle is managed by VS Code.

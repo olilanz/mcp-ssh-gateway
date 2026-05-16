@@ -64,8 +64,9 @@ def _make_service_for_ready(nodes=None, pool_get_connection=None, pool_ensure_op
         pool.get_connection.return_value = _default_conn
         pool.ensure_connection_open.return_value = _default_conn
 
+    from unittest.mock import MagicMock
     hs = handshake_service or _make_mock_handshake_service()
-    return NodeService(registry=registry, pool=pool, handshake_service=hs), registry, pool, hs
+    return NodeService(registry=registry, pool=pool, handshake_service=hs, agent_identity_service=MagicMock()), registry, pool, hs
 
 
 # ---------------------------------------------------------------------------

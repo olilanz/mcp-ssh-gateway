@@ -48,8 +48,9 @@ def node_exec_fixture(spawn_sshd):
     pool.start()
     registry = NodeRegistry()
     registry.add(node_config)
+    from unittest.mock import MagicMock
     handshake_service = NodeHandshakeService()
-    service = NodeService(registry, pool, handshake_service=handshake_service)
+    service = NodeService(registry, pool, handshake_service=handshake_service, agent_identity_service=MagicMock())
     name = conn_config.name
     try:
         yield service, pool, name

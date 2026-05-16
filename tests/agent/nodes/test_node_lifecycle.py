@@ -36,7 +36,7 @@ def test_disable_node_calls_pool_disable():
     registry = NodeRegistry()
     registry.add(make_node_config("lab-pi-01"))
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool, agent_identity_service=MagicMock())
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=MagicMock())
     svc.disable_node("lab-pi-01")
     pool.disable_connection.assert_called_once_with("lab-pi-01")
 
@@ -77,7 +77,7 @@ def test_enable_node_calls_pool_enable():
     registry = NodeRegistry()
     registry.add(make_node_config("lab-pi-01", enabled=False))
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool, agent_identity_service=MagicMock())
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=MagicMock())
     svc.enable_node("lab-pi-01")
     pool.enable_connection.assert_called_once_with("lab-pi-01")
 
@@ -114,7 +114,7 @@ def test_enable_validate_true_not_in_pool():
     pool.get_connection.return_value = None
 
     mock_handshake = MagicMock()
-    svc = NodeService(registry=registry, pool=pool, handshake_service=mock_handshake)
+    svc = NodeService(registry=registry, pool=pool, handshake_service=mock_handshake, agent_identity_service=MagicMock())
 
     result = svc.enable_node("lab-pi-01", validate=True)
 
@@ -143,7 +143,7 @@ def test_enable_validate_true_connection_not_open():
     pool.ensure_connection_open.return_value = None  # but can't be opened
 
     mock_handshake = MagicMock()
-    svc = NodeService(registry=registry, pool=pool, handshake_service=mock_handshake)
+    svc = NodeService(registry=registry, pool=pool, handshake_service=mock_handshake, agent_identity_service=MagicMock())
 
     result = svc.enable_node("lab-pi-01", validate=True)
 
@@ -176,7 +176,7 @@ def test_enable_validate_true_handshake_success():
     mock_handshake = MagicMock()
     mock_handshake.run.return_value = facts
 
-    svc = NodeService(registry=registry, pool=pool, handshake_service=mock_handshake)
+    svc = NodeService(registry=registry, pool=pool, handshake_service=mock_handshake, agent_identity_service=MagicMock())
 
     result = svc.enable_node("lab-pi-01", validate=True)
 
@@ -205,7 +205,7 @@ def test_enable_validate_true_handshake_failed():
     mock_handshake = MagicMock()
     mock_handshake.run.return_value = {}  # handshake returns empty dict
 
-    svc = NodeService(registry=registry, pool=pool, handshake_service=mock_handshake)
+    svc = NodeService(registry=registry, pool=pool, handshake_service=mock_handshake, agent_identity_service=MagicMock())
 
     result = svc.enable_node("lab-pi-01", validate=True)
 
@@ -229,7 +229,7 @@ def test_enable_validate_false_does_not_probe():
 
     pool = make_mock_pool()
     mock_handshake = MagicMock()
-    svc = NodeService(registry=registry, pool=pool, handshake_service=mock_handshake)
+    svc = NodeService(registry=registry, pool=pool, handshake_service=mock_handshake, agent_identity_service=MagicMock())
 
     result = svc.enable_node("lab-pi-01", validate=False)
 
@@ -257,7 +257,7 @@ def test_remove_node_calls_pool_remove():
     registry = NodeRegistry()
     registry.add(make_node_config("lab-pi-01"))
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool, agent_identity_service=MagicMock())
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=MagicMock())
     svc.remove_node("lab-pi-01")
     pool.remove_connection.assert_called_once_with("lab-pi-01")
 
@@ -289,7 +289,7 @@ def test_add_node_unsupported_mode():
     """mode != 'direct' → {"error": "unsupported_mode"}, no SSH attempted."""
     registry = NodeRegistry()
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool, agent_identity_service=MagicMock())
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=MagicMock())
 
     with patch("paramiko.SSHClient") as mock_ssh_cls:
         result = svc.add_node(
@@ -315,7 +315,7 @@ def test_add_node_already_exists():
     registry = NodeRegistry()
     registry.add(make_node_config("new-node"))
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool, agent_identity_service=MagicMock())
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=MagicMock())
 
     with patch("paramiko.SSHClient") as mock_ssh_cls:
         result = svc.add_node(**_ADD_NODE_KWARGS)
@@ -328,7 +328,7 @@ def test_add_node_password_connect_failed():
     """pw_client.connect() raises → {"error": "password_connect_failed"}, registry unchanged, pw_client closed."""
     registry = NodeRegistry()
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool, agent_identity_service=MagicMock())
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=MagicMock())
 
     mock_pw_client = MagicMock()
     mock_pw_client.connect.side_effect = Exception("Connection refused")
@@ -346,11 +346,13 @@ def test_add_node_password_connect_failed():
 
 
 def test_add_node_identity_not_available():
-    """identity_service is None → {"error": "identity_not_available"}, pw_client closed."""
+    """identity_service.get_identity() raises → {"error": "identity_not_available"}, pw_client closed."""
     registry = NodeRegistry()
     pool = make_mock_pool()
-    # No identity service
-    svc = NodeService(registry=registry, pool=pool, agent_identity_service=None)
+    # Identity service that raises on get_identity() — simulates unavailable identity
+    failing_identity_svc = MagicMock()
+    failing_identity_svc.get_identity.side_effect = RuntimeError("identity not available")
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=failing_identity_svc)
 
     mock_pw_client = MagicMock()
 
@@ -367,7 +369,7 @@ def test_add_node_key_install_failed():
     registry = NodeRegistry()
     pool = make_mock_pool()
     identity_svc = make_mock_identity_service()
-    svc = NodeService(registry=registry, pool=pool, agent_identity_service=identity_svc)
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=identity_svc)
 
     mock_pw_client = MagicMock()
     mock_pw_client.open_sftp.side_effect = Exception("SFTP not available")
@@ -390,7 +392,7 @@ def test_add_node_key_auth_failed():
     # but since pool is a mock, we configure relevant methods
     pool.ensure_connection_open.return_value = None
     identity_svc = make_mock_identity_service()
-    svc = NodeService(registry=registry, pool=pool, agent_identity_service=identity_svc)
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=identity_svc)
 
     mock_pw_client = MagicMock()
     mock_sftp = MagicMock()
@@ -417,7 +419,7 @@ def test_add_node_success():
     mock_open_conn = MagicMock()
     pool.ensure_connection_open.return_value = mock_open_conn
     identity_svc = make_mock_identity_service()
-    svc = NodeService(registry=registry, pool=pool, agent_identity_service=identity_svc)
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=identity_svc)
 
     mock_pw_client = MagicMock()
     mock_sftp = MagicMock()
@@ -452,7 +454,7 @@ def test_add_node_password_never_in_config():
     mock_open_conn = MagicMock()
     pool.ensure_connection_open.return_value = mock_open_conn
     identity_svc = make_mock_identity_service()
-    svc = NodeService(registry=registry, pool=pool, agent_identity_service=identity_svc)
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=identity_svc)
 
     mock_pw_client = MagicMock()
     mock_sftp = MagicMock()
@@ -484,7 +486,10 @@ def test_add_node_password_not_in_logs(caplog):
 
     registry = NodeRegistry()
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool, agent_identity_service=None)
+    # Use a failing identity service so the flow terminates early — still tests logs
+    failing_identity_svc = MagicMock()
+    failing_identity_svc.get_identity.side_effect = RuntimeError("identity not available")
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=failing_identity_svc)
     secret_password = "super-secret-bootstrap-pw-12345"
 
     mock_pw_client = MagicMock()
@@ -505,3 +510,50 @@ def test_add_node_password_not_in_logs(caplog):
             f"Password found in log record: {record.getMessage()}"
         )
     assert secret_password not in str(result)
+
+
+# ---------------------------------------------------------------------------
+# NodeService — add_node() rollback on registry.add() failure (Fix 2)
+# ---------------------------------------------------------------------------
+
+
+def test_add_node_registry_add_failure_rolls_back_pool():
+    """If registry.add() raises after pool.add_connection() succeeds, pool.remove_connection is called."""
+    registry = NodeRegistry()
+    pool = make_mock_pool()
+    mock_open_conn = MagicMock()
+    pool.ensure_connection_open.return_value = mock_open_conn
+    identity_svc = make_mock_identity_service()
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=identity_svc)
+
+    mock_pw_client = MagicMock()
+    mock_sftp = MagicMock()
+    mock_sftp.normalize.return_value = "/home/pi"
+    mock_sftp.stat.side_effect = FileNotFoundError
+    mock_fh = MagicMock()
+    mock_fh.read.return_value = b""
+    mock_sftp.file.return_value.__enter__ = MagicMock(return_value=mock_fh)
+    mock_sftp.file.return_value.__exit__ = MagicMock(return_value=False)
+    mock_pw_client.open_sftp.return_value = mock_sftp
+
+    # Make registry.add() raise a ValueError after pool.add_connection() has already been called
+    original_add = registry.add
+    call_count = [0]
+
+    def add_side_effect(cfg):
+        call_count[0] += 1
+        raise ValueError("simulated registry failure")
+
+    registry.add = add_side_effect
+
+    with patch("paramiko.SSHClient", return_value=mock_pw_client):
+        result = svc.add_node(**_ADD_NODE_KWARGS)
+
+    # Should return node_already_exists (from ValueError path)
+    assert result["error"] == "node_already_exists"
+    assert result["name"] == "new-node"
+    # Pool rollback: remove_connection must be called with the node name
+    pool.remove_connection.assert_called_once_with("new-node")
+    # Registry was not successfully populated
+    registry.add = original_add  # restore
+    assert not registry.exists("new-node")

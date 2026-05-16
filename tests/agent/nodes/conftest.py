@@ -68,9 +68,10 @@ def make_service(nodes=None, pool_connections=None, identity_service=None):
 
     nodes: list of (name, mode, enabled) tuples; defaults to one direct/enabled node.
     pool_connections: list of mock connection objects; defaults to empty list.
-    identity_service: optional mock AgentIdentityService (defaults to None).
+    identity_service: optional mock AgentIdentityService (defaults to a MagicMock).
     """
-    from agent.connectionpool.connection import ConnectionState
+    from unittest.mock import MagicMock
+    from agent.nodes.handshake import NodeHandshakeService
 
     registry = NodeRegistry()
     if nodes is None:
@@ -88,7 +89,10 @@ def make_service(nodes=None, pool_connections=None, identity_service=None):
         registry.add(cfg)
 
     pool = make_mock_pool(pool_connections if pool_connections is not None else [])
-    return NodeService(registry=registry, pool=pool, agent_identity_service=identity_service)
+    # Always provide a non-None identity service — NodeService requires both services.
+    effective_identity = identity_service if identity_service is not None else MagicMock()
+    handshake = NodeHandshakeService()
+    return NodeService(registry=registry, pool=pool, handshake_service=handshake, agent_identity_service=effective_identity)
 
 
 def make_mock_identity_service(public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 agent@test"):

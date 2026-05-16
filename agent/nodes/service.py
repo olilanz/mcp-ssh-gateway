@@ -50,12 +50,10 @@ class NodeService:
       - add_node(name, host, port, user, password, mode)
     """
 
-    def __init__(self, registry: NodeRegistry, pool: ConnectionPool, handshake_service=None, agent_identity_service=None) -> None:  # noqa: keep signature backward-compat for now; Fix D enforced via conftest
+    def __init__(self, registry: NodeRegistry, pool: ConnectionPool, handshake_service, agent_identity_service) -> None:
         self._registry = registry
         self._pool = pool
-        # Import here to avoid circular imports at module level if needed
-        from agent.nodes.handshake import NodeHandshakeService
-        self._handshake_service = handshake_service or NodeHandshakeService()
+        self._handshake_service = handshake_service
         self._identity_service = agent_identity_service
 
     # ------------------------------------------------------------------
@@ -376,8 +374,6 @@ class NodeService:
 
         # Step 3: retrieve agent public key and private key path — password is no longer referenced below
         try:
-            if self._identity_service is None:
-                raise RuntimeError("identity service is not configured")
             identity = self._identity_service.get_identity()
             key_line = identity.public_key
             private_key_path = identity.private_key_path
@@ -443,26 +439,37 @@ class NodeService:
             mode="direct",
             id_file=private_key_path,
         )
-        self._pool.add_connection(config)
+        pool_added = False
+        try:
+            self._pool.add_connection(config)
+            pool_added = True
 
-        # Step 7: validate key-based connection
-        conn = self._pool.ensure_connection_open(name)
-        if conn is None:
-            self._pool.remove_connection(name)  # rollback pool entry
-            return {"error": "key_auth_failed", "name": name}
+            # Step 7: validate key-based connection
+            conn = self._pool.ensure_connection_open(name)
+            if conn is None:
+                self._pool.remove_connection(name)
+                return {"error": "key_auth_failed", "name": name}
 
-        # Step 8: commit to registry — only reached on full success
-        node_config = NodeConfig(
-            name=name,
-            host=host,
-            port=port,
-            user=user,
-            mode="direct",
-            enabled=True,
-            id_file=private_key_path,
-        )
-        self._registry.add(node_config)
-        return {"status": "added", "name": name, "validated": True}
+            # Step 8: commit to registry — only reached on full success
+            node_config = NodeConfig(
+                name=name,
+                host=host,
+                port=port,
+                user=user,
+                mode="direct",
+                enabled=True,
+                id_file=private_key_path,
+            )
+            self._registry.add(node_config)
+            return {"status": "added", "name": name, "validated": True}
+        except ValueError:
+            if pool_added:
+                self._pool.remove_connection(name)
+            return {"error": "node_already_exists", "name": name}
+        except Exception:
+            if pool_added:
+                self._pool.remove_connection(name)
+            raise
 
     # ------------------------------------------------------------------
     # Node readiness (execution pre-flight)

@@ -43,6 +43,15 @@ def test_add_node_bootstrap_installs_key_and_validates(bootstrap_service):
     # Node must be in registry
     assert service._registry.exists("bootstrap-test")
 
+    # Fix 6: Prove node is fully operational — not just registered but executable
+    cmd = service.run_command_on_node("bootstrap-test", "echo ok")
+    assert cmd["exit_code"] == 0
+    assert cmd["stdout"].strip() == "ok"
+
+    # Fix 7: Assert that cfg.id_file uses the agent private key path after add_node
+    cfg, _ = service._registry.get("bootstrap-test")
+    assert cfg.id_file == str(service._identity_service.get_identity().private_key_path)
+
 
 @pytest.mark.functional
 @pytest.mark.requires_password_sshd

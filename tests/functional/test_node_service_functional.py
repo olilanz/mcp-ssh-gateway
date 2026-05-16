@@ -62,7 +62,9 @@ def node_service_and_name(spawn_sshd):
     registry = NodeRegistry()
     registry.add(node_config)
 
-    service = NodeService(registry, pool)
+    from unittest.mock import MagicMock
+    from agent.nodes.handshake import NodeHandshakeService
+    service = NodeService(registry, pool, handshake_service=NodeHandshakeService(), agent_identity_service=MagicMock())
     try:
         yield service, pool, name
     finally:

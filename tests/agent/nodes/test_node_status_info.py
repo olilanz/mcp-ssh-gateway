@@ -20,9 +20,10 @@ from tests.agent.nodes.conftest import (
 
 def test_get_node_status_empty_registry():
     """Empty registry returns {"status": "ok", "nodes": []}."""
+    from unittest.mock import MagicMock
     registry = NodeRegistry()
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool)
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=MagicMock())
     result = svc.get_node_status()
     assert result == {"status": "ok", "nodes": []}
 
@@ -100,13 +101,15 @@ def test_get_node_status_cached_info_available_true():
         collected_at=None,
     ))
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool)
+    from unittest.mock import MagicMock
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=MagicMock())
     result = svc.get_node_status()
     assert result["nodes"][0]["cached_info_available"] is True
 
 def test_get_node_status_uses_pool_get_connection_state():
     """NodeService calls pool.get_connection_state(name) — never pool.connections directly."""
     from agent.connectionpool.connection import ConnectionState
+    from unittest.mock import MagicMock
 
     conn = make_mock_connection("lab-pi-01", ConnectionState.OPEN)
     pool = make_mock_pool(connections=[conn])
@@ -114,7 +117,7 @@ def test_get_node_status_uses_pool_get_connection_state():
     cfg = NodeConfig(name="lab-pi-01", mode="direct", enabled=True,
                      host="192.168.1.10", port=22, user="pi", id_file=None)
     registry.add(cfg)
-    svc = NodeService(registry=registry, pool=pool)
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=MagicMock())
     svc.get_node_status()
     pool.get_connection_state.assert_called_with("lab-pi-01")
 
@@ -307,7 +310,8 @@ def test_get_node_info_info_contains_cache_facts():
     registry.update_cache("lab-pi-01", NodeInfoCache(facts=facts, collected_at=None))
 
     pool = make_mock_pool()
-    svc = NodeService(registry=registry, pool=pool)
+    from unittest.mock import MagicMock
+    svc = NodeService(registry=registry, pool=pool, handshake_service=MagicMock(), agent_identity_service=MagicMock())
     result = svc.get_node_info(name="lab-pi-01")
 
     assert result["nodes"][0]["info"] == facts
