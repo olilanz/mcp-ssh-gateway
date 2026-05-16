@@ -225,7 +225,10 @@ class BaseConnection:
                             "limit_bytes": _LIMIT,
                         }
                 except IOError:
-                    pass  # stat unavailable — proceed best-effort
+                    # stat unavailable on this SFTP server or path — proceed best-effort.
+                    # v1 policy: if stat fails, skip the size guard rather than blocking the download.
+                    # A future version may treat stat failure as a hard error instead.
+                    pass
 
                 buf = io.BytesIO()
                 try:

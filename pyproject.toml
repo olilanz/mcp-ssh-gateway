@@ -22,4 +22,5 @@ packages = ["agent"]
 markers = [
     "functional: marks tests that require real system resources (sshd, network)",
     "requires_sshd: marks tests that require a running sshd fixture",
+    "integration: marks integration tests that start the app or external processes (deselect with '-m not integration')",
 ]

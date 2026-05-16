@@ -87,10 +87,16 @@ python -m pip install pytest
 
 ## Build and Test
 
-Run all tests:
+Run all tests (excluding live sshd and external-process tests):
 
 ```bash
-pytest
+pytest -m "not functional and not integration" -q
+```
+
+Run all tests including integration tests (but not live sshd tests):
+
+```bash
+pytest -m "not functional" -q
 ```
 
 Run connection-pool tests:
