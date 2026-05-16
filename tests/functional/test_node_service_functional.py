@@ -36,15 +36,18 @@ def _make_node_config(spawn_sshd) -> NodeConfig:
     )
 
 
-def _wait_for_open(pool: ConnectionPool, name: str, timeout: float = 5.0) -> str:
-    """Poll pool.get_connection_state(name) until it returns 'open' or timeout."""
+def _wait_for_open(pool: ConnectionPool, name: str, timeout: float = 5.0) -> None:
+    """Poll pool.get_connection_state(name) until it returns 'open' or assert on timeout."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        state = pool.get_connection_state(name)
-        if state == "open":
-            return state
+        if pool.get_connection_state(name) == "open":
+            return
         time.sleep(0.1)
-    return pool.get_connection_state(name)
+    final_state = pool.get_connection_state(name)
+    assert final_state == "open", (
+        f"Expected connection '{name}' to become open within {timeout}s, "
+        f"got state '{final_state}'"
+    )
 
 
 @pytest.fixture

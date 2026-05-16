@@ -55,3 +55,51 @@ pytest -m "not functional"
 
 Functional test files live in `tests/functional/`. Unit tests run without the
 `functional` mark and do not require a running sshd process.
+
+## Test Layer Contract
+
+### Layer Definitions
+
+**Unit tests (default)**
+- No real sshd, no app process, no network except mocks
+- Fast and deterministic — must run in < 5 seconds total
+- Run with: `pytest -m "not functional and not integration" -q`
+- These are the default: every PR must keep them green
+
+**Functional tests**
+- Require a live local sshd fixture (`spawn_sshd`)
+- Must be marked `@pytest.mark.functional` and `@pytest.mark.requires_sshd`
+- Must clean up remote files in `finally` blocks
+- Must use `shlex.quote()` for any shell path interpolation
+- Run with: `pytest -m functional -q`
+
+**Integration tests**
+- May start `app.py`, MCP server, or other real processes
+- Must be marked `@pytest.mark.integration`
+- Must have explicit process timeout and cleanup
+- Must not use raw stdin/stdout JSON protocol — use actual MCP client behavior
+- Run with: `pytest -m integration -q`
+
+### Wait Helper Contract
+
+`_wait_for_open()` helpers in functional tests must assert clearly on timeout:
+```python
+assert final_state == "open", f"Expected 'open' within {timeout}s, got '{final_state}'"
+```
+Silent returns after timeout hide test infrastructure failures.
+
+### Marker Commands
+
+```bash
+# Default (fast, no real SSH or processes):
+pytest -m "not functional and not integration" -q
+
+# Full functional suite (requires sshd):
+pytest -m functional -q
+
+# Integration tests (requires running app):
+pytest -m integration -q
+
+# Everything except integration:
+pytest -m "not integration" -q
+```

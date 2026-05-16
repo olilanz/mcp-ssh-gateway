@@ -1,5 +1,6 @@
 """Phase 8 — Functional tests for node execution and handshake against a live sshd fixture."""
 import os
+import shlex
 import pytest
 
 
@@ -10,6 +11,11 @@ def _wait_for_open(pool, name, timeout=5.0):
         if pool.get_connection_state(name) == "open":
             return
         time.sleep(0.1)
+    final_state = pool.get_connection_state(name)
+    assert final_state == "open", (
+        f"Expected connection '{name}' to become open within {timeout}s, "
+        f"got state '{final_state}'"
+    )
 
 
 @pytest.fixture
@@ -86,9 +92,20 @@ def test_run_command_on_node_disabled_node_rejected(node_exec_fixture):
 def test_run_command_on_node_timeout(node_exec_fixture):
     service, pool, name = node_exec_fixture
     _wait_for_open(pool, name)
+
+    # timeout should return error dict
     result = service.run_command_on_node(name, "sleep 10", timeout=1)
     assert result.get("error") == "timeout"
     assert result.get("name") == name
+
+    # Post-timeout: the connection may be broken — ensure_connection_open should recover it
+    # Then a simple command should work
+    pool.ensure_connection_open(name)
+    recovery_result = service.run_command_on_node(name, "echo post-timeout", timeout=10)
+    assert recovery_result.get("exit_code") == 0, (
+        f"Post-timeout command failed: {recovery_result}"
+    )
+    assert "post-timeout" in recovery_result.get("stdout", "")
 
 
 @pytest.mark.functional
@@ -102,17 +119,17 @@ def test_upload_file_to_node_writes_file(node_exec_fixture):
     data_b64 = base64.b64encode(content).decode()
     remote_path = f"/tmp/mcp_test_upload_{os.getpid()}.txt"
 
-    result = service.upload_file_to_node(name, remote_path, data_b64, mode="0644")
-    assert result.get("status") == "written"
-    assert result.get("path") == remote_path
+    try:
+        result = service.upload_file_to_node(name, remote_path, data_b64, mode="0644")
+        assert result.get("status") == "written"
+        assert result.get("path") == remote_path
 
-    # Verify file content via SSH command
-    verify = service.run_command_on_node(name, f"cat {remote_path}")
-    assert verify["exit_code"] == 0
-    assert verify["stdout"].strip() == "hello from upload"
-
-    # Cleanup
-    service.run_command_on_node(name, f"rm -f {remote_path}")
+        # Verify file content via SSH command
+        verify = service.run_command_on_node(name, f"cat {shlex.quote(remote_path)}")
+        assert verify["exit_code"] == 0
+        assert verify["stdout"].strip() == "hello from upload"
+    finally:
+        service.run_command_on_node(name, f"rm -f {shlex.quote(remote_path)}")
 
 
 @pytest.mark.functional
@@ -125,21 +142,21 @@ def test_download_file_from_node_reads_file(node_exec_fixture):
     remote_path = f"/tmp/mcp_test_download_{os.getpid()}.txt"
     expected_content = "hello from download"
 
-    # Write file via SSH command
-    write_result = service.run_command_on_node(
-        name, f"printf '%s' '{expected_content}' > {remote_path}"
-    )
-    assert write_result["exit_code"] == 0
+    try:
+        # Write file via SSH command
+        write_result = service.run_command_on_node(
+            name, f"printf '%s' '{expected_content}' > {shlex.quote(remote_path)}"
+        )
+        assert write_result["exit_code"] == 0
 
-    # Download and verify
-    result = service.download_file_from_node(name, remote_path)
-    assert result.get("status") == "ok"
-    assert result.get("path") == remote_path
-    decoded = base64.b64decode(result["data_b64"]).decode()
-    assert decoded == expected_content
-
-    # Cleanup
-    service.run_command_on_node(name, f"rm -f {remote_path}")
+        # Download and verify
+        result = service.download_file_from_node(name, remote_path)
+        assert result.get("status") == "ok"
+        assert result.get("path") == remote_path
+        decoded = base64.b64decode(result["data_b64"]).decode()
+        assert decoded == expected_content
+    finally:
+        service.run_command_on_node(name, f"rm -f {shlex.quote(remote_path)}")
 
 
 @pytest.mark.functional
